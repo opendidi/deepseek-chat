@@ -1,0 +1,188 @@
+import { useEffect } from 'react'
+import { useTranslate } from '../i18n/index.js'
+import { setSiderCollapsed, useSettings } from '../services/settings.js'
+import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
+import {
+  bindChatPersistence,
+  initChat,
+  newChat,
+  retrySaveSessions,
+  selectSession,
+  useChatStore,
+} from '../services/chat/store.js'
+import { initFavorites } from '../services/chat/favorites.js'
+import { SearchPanel } from '../components/search/SearchPanel.js'
+import { closeSearchPanel } from '../components/search/searchPanelState.js'
+import { PromptLibrary } from '../components/chatInput/PromptLibrary.js'
+import { SessionView } from '../components/session/SessionView.js'
+import { MobileHeader } from '../components/session/MobileHeader.js'
+import { Welcome } from '../components/session/Welcome.js'
+import { ensureApiKey, openSettings } from '../components/settings/settingsDialogState.js'
+import { SettingsDialog } from '../components/settings/SettingsDialog.js'
+import { Lightbox } from '../components/base/Lightbox.js'
+import { Toast } from '../components/base/Toast.js'
+import { showToast } from '../components/base/toastState.js'
+import { onUploadNotice } from '../services/attachments.js'
+import { Button } from '../components/base/Button.js'
+import { stopReadAloud } from '../services/speech/readAloud.js'
+import { CollapsedSider } from '../components/sider/CollapsedSider.js'
+import { closeMobileSider, openMobileSider } from '../components/sider/mobileSiderState.js'
+import { MobileSider, Sider } from '../components/sider/Sider.js'
+import { requestSiderSearchFocus } from '../components/sider/siderSearchState.js'
+import styles from './App.module.css'
+
+export const App = () => {
+  const t = useTranslate()
+  const isMobile = useIsMobile()
+  const locale = useSettings((state) => state.locale)
+  const fontSize = useSettings((state) => state.fontSize)
+  // 移动端侧边栏以独立抽屉管理开合状态
+  const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
+  const ready = useChatStore((state) => state.ready)
+  const initError = useChatStore((state) => state.initError)
+  const saveError = useChatStore((state) => Object.values(state.sessionSaveErrors).some(Boolean))
+  const importingHistory = useChatStore((state) => state.importingHistory)
+  const session = useChatStore((state) =>
+    state.activeId !== null && Object.hasOwn(state.sessionCache, state.activeId)
+      ? state.sessionCache[state.activeId]
+      : undefined
+  )
+  const sessionLoadError = useChatStore((state) =>
+    state.activeId === null ? false : state.sessionLoadErrors[state.activeId] === true
+  )
+  const frameRef = useMobileViewport(isMobile)
+  const streaming = useChatStore((state) =>
+    state.activeId === null ? false : Object.hasOwn(state.streaming, state.activeId)
+  )
+  const activeId = useChatStore((state) => state.activeId)
+
+  usePreventPageScroll(isMobile)
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
+
+  // 界面字号档位写进 body 属性，由 theme.css 的变量覆盖基准字号
+  useEffect(() => {
+    const body = document.body
+    if (fontSize === 'm') {
+      delete body.dataset.dsFontSize
+    } else {
+      body.dataset.dsFontSize = fontSize
+    }
+  }, [fontSize])
+
+  // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
+  useEffect(() => onUploadNotice(showToast), [])
+  useEffect(bindChatPersistence, [])
+
+  // 全局快捷键：Ctrl/Cmd+K 搜索会话、Ctrl/Cmd+Shift+O 新建对话、Ctrl/Cmd+, 打开设置
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey
+      if (!mod || event.altKey) {
+        return
+      }
+      const key = event.key.toLowerCase()
+      if (key === 'k' && !event.shiftKey) {
+        event.preventDefault()
+        // 先展开侧边栏 / 打开移动端抽屉，Sider 挂载后按时间戳自动聚焦搜索框
+        requestSiderSearchFocus()
+        if (isMobile) {
+          openMobileSider()
+        } else {
+          setSiderCollapsed(false)
+        }
+      } else if (key === 'o' && event.shiftKey) {
+        event.preventDefault()
+        newChat()
+        closeMobileSider()
+      } else if (event.key === ',') {
+        event.preventDefault()
+        openSettings('general')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isMobile])
+
+  // 搜索结果面板只属于当前会话
+  useEffect(closeSearchPanel, [activeId])
+  // 切换会话时停止朗读
+  useEffect(stopReadAloud, [activeId])
+  // 移动端选中会话、切换布局后收起抽屉
+  useEffect(closeMobileSider, [activeId, isMobile])
+
+  useEffect(() => {
+    void initChat()
+    void initFavorites()
+    // 首次打开先在设置里输入 API Key
+    ensureApiKey()
+  }, [])
+
+  return (
+    <>
+      <div ref={frameRef} className={styles.frame}>
+        {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
+        <main className={styles.main}>
+          {saveError ? (
+            <div className={styles.saveError} role="alert">
+              <span>{t('sessionSaveFailed')}</span>
+              <Button
+                variant="outlined"
+                size="s"
+                disabled={importingHistory}
+                onClick={retrySaveSessions}
+              >
+                {t('retry')}
+              </Button>
+            </div>
+          ) : null}
+          <div className={styles.content}>
+            {siderCollapsed ? <CollapsedSider /> : null}
+            {!ready || (activeId !== null && !session) ? (
+              <div className={styles.loadingView}>
+                {isMobile ? <MobileHeader /> : null}
+                <div className={styles.loadingState} role="status" aria-live="polite">
+                  <span>
+                    {(!ready ? initError : sessionLoadError)
+                      ? t(!ready ? 'sessionListLoadFailed' : 'sessionLoadFailed')
+                      : t('sessionLoading')}
+                  </span>
+                  {(!ready ? initError : sessionLoadError) ? (
+                    <Button
+                      variant="outlined"
+                      size="m"
+                      onClick={() => {
+                        if (!ready) {
+                          void initChat()
+                        } else if (activeId !== null) {
+                          selectSession(activeId)
+                        }
+                      }}
+                    >
+                      {t('retry')}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : session ? (
+              <SessionView
+                session={session}
+                streaming={streaming}
+                siderCollapsed={siderCollapsed}
+              />
+            ) : (
+              <Welcome />
+            )}
+          </div>
+        </main>
+        <SearchPanel />
+      </div>
+      <SettingsDialog />
+      <Lightbox />
+      <PromptLibrary />
+      <Toast />
+    </>
+  )
+}

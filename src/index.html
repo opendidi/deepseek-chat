@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <!--
+    静态站没有响应头，用 meta 下发 CSP 作为 XSS 的第二层防线：
+    - script-src 只允许同源脚本，阻止注入的内联脚本与 javascript: 执行；
+    - style-src 放行 inline 是因为 KaTeX / Mermaid 生成的 HTML 带 style 属性；
+    - connect-src 允许任意 https 与本地回环地址，兼容 createConfig({ apiOrigin }) 与
+      运行时在设置里自定义的接口地址（本地网关常见 http://localhost）；Chrome 不接受
+      CSP 源里的 IPv6 字面量（[::1]），IPv6 本地服务请用 localhost 访问；
+    - img-src 放行 https 用于搜索结果站点图标，blob:/data: 用于本地附件与图表。
+  -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:; object-src 'none'; base-uri 'self'; form-action 'none'; worker-src 'self' blob:"
+    />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="static/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="static/icons/icon-180.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>DeepSeek</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
