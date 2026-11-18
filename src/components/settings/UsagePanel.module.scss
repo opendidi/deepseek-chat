@@ -119,6 +119,7 @@
 
 /* ---- 每日消耗：带坐标轴、网格与日期刻度的柱状图 ---- */
 .chartCard {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -205,7 +206,7 @@
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  height: 76px;
+  height: 108px;
 }
 
 .barColumn {
@@ -592,7 +593,7 @@
 }
 
 .barsCompact {
-  height: 60px;
+  height: 92px;
 }
 
 .inlineError {
@@ -602,4 +603,66 @@
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
   line-height: 18px;
+}
+
+/* 悬浮态：高亮当前列 / 日历格，并在光标上方显示当日三项用量 */
+.barColumnActive {
+  border-radius: 3px 3px 0 0;
+  background-color: var(--dsw-alias-bg-skeleton);
+}
+
+.heatCellActive {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 5;
+  box-sizing: border-box;
+  min-width: 128px;
+  padding: 7px 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background-color: var(--dsw-alias-bg-base);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  line-height: 16px;
+  pointer-events: none;
+  transform: translate(14px, -50%);
+}
+
+.tooltipLeft {
+  transform: translate(calc(-100% - 14px), -50%);
+}
+
+.tooltipDate {
+  margin-bottom: 4px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--dsw-alias-label-tertiary);
+
+  strong {
+    color: var(--dsw-alias-label-secondary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+}
+
+.tooltipRowActive {
+  color: var(--dsw-alias-brand-text);
+
+  strong {
+    color: var(--dsw-alias-brand-text);
+  }
 }

@@ -70,6 +70,10 @@ export const calendarCells = <T extends { date: string }>(days: T[]): (T | null)
   return [...cells, ...Array<T | null>(trailing).fill(null)]
 }
 
+/** 光标在绘图区的横向比例换算成日期列索引，越界时收口到首尾 */
+export const chartIndexAt = (ratio: number, length: number) =>
+  Math.max(0, Math.min(length - 1, Math.floor(ratio * length)))
+
 /** YYYY-MM-DD -> 日号（去掉前导零），用于日历格子内的数字 */
 export const dayOfMonth = (date: string) => String(Number(date.slice(-2)))
 

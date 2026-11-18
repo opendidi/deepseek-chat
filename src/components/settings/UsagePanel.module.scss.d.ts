@@ -4,6 +4,7 @@ declare const styles: {
   readonly actions: string
   readonly bar: string
   readonly barColumn: string
+  readonly barColumnActive: string
   readonly barEmpty: string
   readonly bars: string
   readonly barsCompact: string
@@ -26,6 +27,7 @@ declare const styles: {
   readonly header: string
   readonly heatBlock: string
   readonly heatCell: string
+  readonly heatCellActive: string
   readonly heatCellVoid: string
   readonly heatDay: string
   readonly heatFooter: string
@@ -64,6 +66,11 @@ declare const styles: {
   readonly segments: string
   readonly subLabel: string
   readonly title: string
+  readonly tooltip: string
+  readonly tooltipDate: string
+  readonly tooltipLeft: string
+  readonly tooltipRow: string
+  readonly tooltipRowActive: string
   readonly xAxis: string
   readonly xAxisSpacer: string
   readonly xLabel: string

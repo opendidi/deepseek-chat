@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import clsx from 'clsx'
 import { useTranslate } from '../../i18n/index.js'
 import { BUILTIN_MODELS } from '../../services/models.js'
@@ -17,6 +17,7 @@ import { showToast } from '../base/toastState.js'
 import {
   axisLabel,
   calendarCells,
+  chartIndexAt,
   chartLabelIndices,
   dayOfMonth,
   formatMoney,
@@ -30,6 +31,7 @@ import {
 import styles from './UsagePanel.module.scss'
 
 type Metric = UsageMetric
+type ChartTip = { x: number; y: number; index: number; side: 'left' | 'right' }
 
 const RANGES: { value: UsageRange; label: 'usageRangeToday' | 'usageRange7d' | 'usageRange30d' }[] = [
   { value: 'today', label: 'usageRangeToday' },
@@ -68,6 +70,8 @@ export const UsagePanel = () => {
   const [failed, setFailed] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [reload, setReload] = useState(0)
+  const [tip, setTip] = useState<ChartTip | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -106,8 +110,43 @@ export const UsagePanel = () => {
     [data, metric]
   )
   const labelIndices = useMemo(() => chartLabelIndices(data?.daily.length ?? 0), [data])
-  const calendarDays = useMemo(() => calendarCells(data?.daily ?? []), [data])
+  const calendarDays = useMemo(
+    () => calendarCells((data?.daily ?? []).map((day, index) => ({ ...day, index }))),
+    [data]
+  )
   const weekNames = t('usageWeekdays').trim().split(/\s+/)
+  const tipDay = tip ? data?.daily[tip.index] : undefined
+
+  /** 悬浮时把当日的三项用量显示在卡片内的小浮层上 */
+  const showTip = (event: MouseEvent<HTMLElement>, index: number) => {
+    const card = cardRef.current?.getBoundingClientRect()
+    if (!card || !data) {
+      return
+    }
+    const x = Math.max(76, Math.min(card.width - 76, event.clientX - card.left))
+    const y = Math.max(52, Math.min(card.height - 52, event.clientY - card.top))
+    const side: ChartTip['side'] = x > card.width - 170 ? 'left' : 'right'
+    setTip((prev) =>
+      prev &&
+      prev.index === index &&
+      prev.side === side &&
+      Math.abs(prev.x - x) < 4 &&
+      Math.abs(prev.y - y) < 4
+        ? prev
+        : { x, y, index, side }
+    )
+  }
+
+  /** 光标落在绘图区任意位置都按列换算成对应的日期，列间空隙也能显示数据 */
+  const onPlotMove = (event: MouseEvent<HTMLDivElement>) => {
+    if (!data || data.daily.length === 0) {
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    const ratio = (event.clientX - rect.left) / Math.max(1, rect.width)
+    showTip(event, chartIndexAt(ratio, data.daily.length))
+  }
+
   const totals = data?.totals
   const context = data?.context
   const windowPercent = context
@@ -218,7 +257,7 @@ export const UsagePanel = () => {
                 ))}
               </div>
             </div>
-            <div className={styles.chartCard}>
+            <div ref={cardRef} className={styles.chartCard}>
               <div className={styles.chartMeta}>
                 <span className={styles.chartMetaText}>
                   {peakValue > 0 && peakDay
@@ -236,26 +275,28 @@ export const UsagePanel = () => {
                 ) : null}
               </div>
 
-              <div className={styles.plot}>
+              <div className={styles.plot} onMouseLeave={() => setTip(null)}>
                 <div className={styles.yAxis}>
                   <span>{axisLabel(maxDaily, metric)}</span>
                   <span>{axisLabel(maxDaily / 2, metric)}</span>
                   <span>{axisLabel(0, metric)}</span>
                 </div>
-                <div className={styles.plotMain}>
+                <div className={styles.plotMain} onMouseMove={onPlotMove}>
                   <div className={styles.grid}>
                     <span className={styles.gridLine} />
                     <span className={styles.gridLine} />
                     <span className={styles.gridLine} />
                   </div>
                   <div className={clsx(styles.bars, data.daily.length > 7 && styles.barsCompact)}>
-                    {data.daily.map((day) => {
+                    {data.daily.map((day, index) => {
                       const value = metricValue(day, metric)
                       return (
                         <div
                           key={day.date}
-                          className={styles.barColumn}
-                          title={`${day.date}: ${metricText(value, metric)}`}
+                          className={clsx(
+                            styles.barColumn,
+                            tip?.index === index && styles.barColumnActive
+                          )}
                         >
                           <div
                             className={clsx(styles.bar, value === 0 && styles.barEmpty)}
@@ -298,7 +339,7 @@ export const UsagePanel = () => {
                         <span key={index}>{name}</span>
                       ))}
                     </div>
-                    <div className={styles.heatmap}>
+                    <div className={styles.heatmap} onMouseLeave={() => setTip(null)}>
                       {calendarDays.map((day, index) => {
                         if (!day) {
                           return <span key={`void-${index}`} className={styles.heatCellVoid} />
@@ -309,9 +350,10 @@ export const UsagePanel = () => {
                             key={day.date}
                             className={clsx(
                               styles.heatCell,
-                              HEAT_LEVELS[heatLevel(value, maxDaily)]
+                              HEAT_LEVELS[heatLevel(value, maxDaily)],
+                              tip?.index === day.index && styles.heatCellActive
                             )}
-                            title={`${day.date}: ${metricText(value, metric)}`}
+                            onMouseEnter={(event) => showTip(event, day.index)}
                           >
                             <span className={styles.heatDay}>{dayOfMonth(day.date)}</span>
                           </span>
@@ -330,6 +372,46 @@ export const UsagePanel = () => {
                     </div>
                   </div>
                 </>
+              ) : null}
+
+              {tip && tipDay ? (
+                <div
+                  className={clsx(
+                    styles.tooltip,
+                    tip.side === 'left' && styles.tooltipLeft
+                  )}
+                  style={{ left: tip.x, top: tip.y }}
+                  role="tooltip"
+                >
+                  <div className={styles.tooltipDate}>{shortDate(tipDay.date)}</div>
+                  <div
+                    className={clsx(
+                      styles.tooltipRow,
+                      metric === 'tokens' && styles.tooltipRowActive
+                    )}
+                  >
+                    <span>{t('usageMetricTokens')}</span>
+                    <strong>{formatNumber(tipDay.tokens)}</strong>
+                  </div>
+                  <div
+                    className={clsx(
+                      styles.tooltipRow,
+                      metric === 'cost' && styles.tooltipRowActive
+                    )}
+                  >
+                    <span>{t('usageMetricCost')}</span>
+                    <strong>{formatMoney(tipDay.cost)}</strong>
+                  </div>
+                  <div
+                    className={clsx(
+                      styles.tooltipRow,
+                      metric === 'replies' && styles.tooltipRowActive
+                    )}
+                  >
+                    <span>{t('usageMetricReplies')}</span>
+                    <strong>{formatNumber(tipDay.replies)}</strong>
+                  </div>
+                </div>
               ) : null}
             </div>
           </section>

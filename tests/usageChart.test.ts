@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import {
   axisLabel,
   calendarCells,
+  chartIndexAt,
   chartLabelIndices,
   dayOfMonth,
   formatMoney,
@@ -42,6 +43,14 @@ test('热力图按峰值分四级', () => {
   assert.equal(heatLevel(20, 100), 1)
   assert.equal(heatLevel(50, 100), 2)
   assert.equal(heatLevel(80, 100), 3)
+})
+
+test('光标横向位置换算到日期列', () => {
+  assert.equal(chartIndexAt(0, 30), 0)
+  assert.equal(chartIndexAt(0.5, 30), 15)
+  assert.equal(chartIndexAt(1.2, 30), 29)
+  assert.equal(chartIndexAt(-0.2, 30), 0)
+  assert.equal(chartIndexAt(0.9, 7), 6)
 })
 
 test('日历格子按周一补前置空格并补齐整周', () => {
