@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDismiss } from './anchored.js'
-import styles from './Menu.module.css'
+import styles from './Menu.module.scss'
 
 export type MenuOption = {
   key: string

@@ -22,7 +22,7 @@ import { SessionItem } from './SessionItem.js'
 import { FavoritesDialog } from './FavoritesDialog.js'
 import { useSessionSearch } from './useSessionSearch.js'
 import { useSiderSearchFocus } from './siderSearchState.js'
-import styles from './Sider.module.css'
+import styles from './Sider.module.scss'
 
 /** 展开的侧边栏：名称与收起按钮、开启新对话、会话搜索与按时间分组的会话列表、底部设置；移动端放在抽屉里，收起按钮关闭抽屉 */
 export const Sider = ({ mobile = false }: { mobile?: boolean }) => {

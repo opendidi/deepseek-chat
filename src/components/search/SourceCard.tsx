@@ -3,7 +3,7 @@ import type { Source } from '../../services/chat/view.js'
 import { formatDate } from '../../utils/format.js'
 import { safeWebUrl } from '../../utils/url.js'
 import { SiteLogo } from './SiteLogo.js'
-import styles from './SourceCard.module.css'
+import styles from './SourceCard.module.scss'
 
 /** 显示为 YYYY/MM/DD；无法解析的日期原样显示 */
 const formatPublishedAt = (value: string | null) => (value ? (formatDate(value, '/') ?? value) : '')

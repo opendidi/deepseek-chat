@@ -6,7 +6,7 @@ import type { DraftAttachment } from '../../services/chat/drafts.js'
 import { IconCloseFill14, IconRefreshOutline16 } from '../base/icons.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { FileCard } from '../files/FileCard.js'
-import styles from './ChatInput.module.css'
+import styles from './ChatInput.module.scss'
 
 const UPLOADING: UploadTask = { status: 'uploading' }
 

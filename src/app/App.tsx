@@ -29,7 +29,7 @@ import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider, openMobileSider } from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { requestSiderSearchFocus } from '../components/sider/siderSearchState.js'
-import styles from './App.module.css'
+import styles from './App.module.scss'
 
 export const App = () => {
   const t = useTranslate()
@@ -62,7 +62,7 @@ export const App = () => {
     document.documentElement.lang = locale
   }, [locale])
 
-  // 界面字号档位写进 body 属性，由 theme.css 的变量覆盖基准字号
+  // 界面字号档位写进 body 属性，由 theme.scss 的变量覆盖基准字号
   useEffect(() => {
     const body = document.body
     if (fontSize === 'm') {

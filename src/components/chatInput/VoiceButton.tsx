@@ -3,7 +3,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { IconMicFill16, IconMicOutline16 } from '../base/icons.js'
 import { Tooltip } from '../base/Tooltip.js'
 import type { VoiceInputStatus } from './useVoiceInput.js'
-import styles from './VoiceButton.module.css'
+import styles from './VoiceButton.module.scss'
 
 /**
  * 语音输入按钮。

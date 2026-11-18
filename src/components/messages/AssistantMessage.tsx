@@ -31,7 +31,7 @@ import {
   type MessageVersions,
   type SelectMessageVersion,
 } from './BranchSwitcher.js'
-import styles from './AssistantMessage.module.css'
+import styles from './AssistantMessage.module.scss'
 
 const TOP_UP_URL = 'https://platform.deepseek.com/top_up'
 

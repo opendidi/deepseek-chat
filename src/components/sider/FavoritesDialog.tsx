@@ -6,7 +6,7 @@ import { removeFavorite, useFavorites } from '../../services/chat/favorites.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import { IconCopyOutline16, IconTrashOutline16 } from '../base/icons.js'
-import styles from './FavoritesDialog.module.css'
+import styles from './FavoritesDialog.module.scss'
 
 /** 收藏夹弹窗：列出收藏的回答，可复制、跳回原对话或移除 */
 export const FavoritesDialog = ({ onClose }: { onClose: () => void }) => {

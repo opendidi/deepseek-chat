@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Tooltip, type TooltipPlacement } from './Tooltip.js'
-import styles from './IconButton.module.css'
+import styles from './IconButton.module.scss'
 
 /**
  * xs 为 28px（图标 16px）、m 为 34px、xl 为 44px（图标 20px）。

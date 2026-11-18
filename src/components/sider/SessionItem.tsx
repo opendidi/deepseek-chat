@@ -15,7 +15,7 @@ import { IconButton } from '../base/IconButton.js'
 import { Menu } from '../base/Menu.js'
 import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from './mobileSiderState.js'
-import styles from './SessionItem.module.css'
+import styles from './SessionItem.module.scss'
 
 export const SessionItem = memo(function SessionItem({
   session,

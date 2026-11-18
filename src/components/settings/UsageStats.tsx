@@ -3,7 +3,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { collectUsageStats, type UsageStats } from '../../services/chat/usageStats.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
-import styles from './Settings.module.css'
+import styles from './Settings.module.scss'
 
 /** 数据管理里的用量统计入口与面板：打开时扫描本地会话汇总 */
 export const UsageStatsCell = () => {

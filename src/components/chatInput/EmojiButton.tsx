@@ -6,7 +6,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { useAnchoredPosition, useDismiss } from '../base/anchored.js'
 import { IconButton } from '../base/IconButton.js'
 import { IconSmileOutline16 } from '../base/icons.js'
-import styles from './EmojiButton.module.css'
+import styles from './EmojiButton.module.scss'
 
 /**
  * 表情数据 + Picker 约 550K（其中 emoji 数据 424K），首次点击现场下载在慢网下要等近 3 秒。
@@ -105,7 +105,7 @@ export const EmojiButton = ({
 
   /**
    * 移动端面板和键盘互斥：打开时收起软键盘，并把面板高度同步给页面框架
-   * （App.module.css 的 .frame 用它缩短自身，输入框随之抬到面板上方）。
+   * （App.module.scss 的 .frame 用它缩短自身，输入框随之抬到面板上方）。
    */
   useLayoutEffect(() => {
     if (!open || !isMobile) {

@@ -14,7 +14,7 @@ import { useSettings } from '../../services/settings.js'
 import { useAnchoredPosition, useDismiss } from '../base/anchored.js'
 import { IconCheckOutline16, IconChevronDownOutline14, IconModelOutline14, IconRefreshOutline16 } from '../base/icons.js'
 import { Tooltip } from '../base/Tooltip.js'
-import styles from './ModelPicker.module.css'
+import styles from './ModelPicker.module.scss'
 
 /** 模型选择：触发按钮上方弹出完整面板，内置列表可与 GET /models 的云端列表互换 */
 export const ModelPicker = ({

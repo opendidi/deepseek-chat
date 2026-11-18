@@ -2,7 +2,7 @@ import { useIsMobile } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
 import { ChatInput } from '../chatInput/ChatInput.js'
 import { MobileHeader } from './MobileHeader.js'
-import styles from './Welcome.module.css'
+import styles from './Welcome.module.scss'
 
 /** 新对话：问候语 + 输入框。桌面端居中；移动端输入框吸底 */
 export const Welcome = () => {

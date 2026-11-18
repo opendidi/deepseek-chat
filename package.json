@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "rspack serve -c rspack.config.ts",
+    "dev": "rspack serve -c rspack.config.ts --open",
     "build": "cross-env NODE_ENV=production rspack build -c rspack.config.ts",
     "type": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --test \".test-build/tests/*.test.js\"",
@@ -48,6 +48,8 @@
     "cross-env": "^10.1.0",
     "oxfmt": "0.48.0",
     "oxlint": "1.63.0",
+    "sass-embedded": "^1.108.2",
+    "sass-loader": "^17.1.0",
     "typescript": "7.0.2"
   }
 }

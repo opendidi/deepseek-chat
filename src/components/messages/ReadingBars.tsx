@@ -12,7 +12,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 
-import styles from './ReadingBars.module.css'
+import styles from './ReadingBars.module.scss'
 
 /** 条宽 2、间距 2，总宽 14 在 16 视口内居中 */
 const BAR_XS = [1, 5, 9, 13]
@@ -26,7 +26,7 @@ const STATIC_PLAYING_HEIGHTS = [7, 14, 4, 10]
 /** ease-in-out 的 cubic-bezier */
 const EASE_IN_OUT = '0.42 0 0.58 1'
 
-/** loading 扫光蒙层逐条一份高斯 keyframes（峰对齐条的几何位置），见 module.css */
+/** loading 扫光蒙层逐条一份高斯 keyframes（峰对齐条的几何位置），见 module.scss */
 const SWEEP_CLASSES = [styles.sweep1, styles.sweep2, styles.sweep3, styles.sweep4]
 
 export function ReadingBars({ mode }: { mode: 'loading' | 'playing' }) {

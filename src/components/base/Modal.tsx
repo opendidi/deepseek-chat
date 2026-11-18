@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16 } from './icons.js'
 import { IconButton } from './IconButton.js'
-import styles from './Modal.module.css'
+import styles from './Modal.module.scss'
 
 /** 当前打开的弹窗，后打开的在末尾；叠放时 Esc 只关闭最上层 */
 const openModals: object[] = []

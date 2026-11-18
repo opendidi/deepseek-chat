@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDismiss } from '../base/anchored.js'
 import { IconListOutline16 } from '../base/icons.js'
 import { useTranslate } from '../../i18n/index.js'
-import styles from './TocMenu.module.css'
+import styles from './TocMenu.module.scss'
 
 /** 滚动到指定消息：MessageList 自身的滚动状态会随 scroll 事件同步 */
 const scrollToMessage = (id: string) => {

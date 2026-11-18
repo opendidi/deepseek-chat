@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import type { ButtonHTMLAttributes } from 'react'
-import styles from './Button.module.css'
+import styles from './Button.module.scss'
 
 export const Button = ({
   variant = 'primary',

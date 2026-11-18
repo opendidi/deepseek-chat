@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import styles from './Spectrum.module.css'
+import styles from './Spectrum.module.scss'
 
 /** 与设计稿一致：2px 宽、3px 间距，静止 5px，最高 36px */
 const BAR_WIDTH = 2

@@ -1,7 +1,7 @@
 import { useEffect, type HTMLAttributes, type MutableRefObject, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDelayedOpen } from '../base/anchored.js'
-import styles from './HoverCard.module.css'
+import styles from './HoverCard.module.scss'
 
 const ENTER_DELAY = 300
 const LEAVE_DELAY = 100

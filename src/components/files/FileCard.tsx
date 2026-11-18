@@ -4,7 +4,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { formatSize, getExtension } from '../../services/attachments.js'
 import { IconCloseFill14, IconRefreshOutline16 } from '../base/icons.js'
 import { FileIcon } from './FileIcon.js'
-import styles from './FileCard.module.css'
+import styles from './FileCard.module.scss'
 
 /**
  * 文档文件卡片：图标 + 文件名 + 「扩展名 大小」或状态文案。

@@ -3,7 +3,7 @@ import { IconCloseOutline16 } from '../base/icons.js'
 import { IconButton } from '../base/IconButton.js'
 import { closeSearchPanel, useSearchPanel } from './searchPanelState.js'
 import { SourceCard } from './SourceCard.js'
-import styles from './SearchPanel.module.css'
+import styles from './SearchPanel.module.scss'
 
 /** 右侧「搜索结果」面板 */
 export const SearchPanel = () => {

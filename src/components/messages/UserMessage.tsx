@@ -16,7 +16,7 @@ import {
 } from './BranchSwitcher.js'
 import { MessageFile } from './MessageFile.js'
 import { CopyButton } from './CopyButton.js'
-import styles from './UserMessage.module.css'
+import styles from './UserMessage.module.scss'
 
 export const UserMessage = memo(function UserMessage({
   sessionId,

@@ -27,7 +27,7 @@ const getUploadRetryId = (messages: Message[], streaming: boolean) => {
     ? last.id
     : null
 }
-import styles from './MessageList.module.css'
+import styles from './MessageList.module.scss'
 
 /** 距底部小于该值时视为在底部，流式内容增长时跟随 */
 const STICKY_THRESHOLD = 40

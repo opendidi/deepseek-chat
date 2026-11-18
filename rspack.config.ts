@@ -19,6 +19,9 @@ const cssLoader = {
   options: { targets },
 }
 
+/** sass-loader 先编译 SCSS，再交给 lightningcss 做目标浏览器降级；sass-embedded 会被自动选用 */
+const sassLoader = { loader: 'sass-loader' }
+
 type ConfigOptions = {
   /** 公开 API 的地址，注入为 __API_ORIGIN__ */
   apiOrigin?: string
@@ -53,10 +56,13 @@ export const createConfig = ({
     extensionAlias: { '.js': ['.ts', '.tsx', '.js'] },
   },
   module: {
-    // CSS Modules 使用默认导出：`import styles from './x.module.css'`
+    // CSS Modules 使用默认导出：`import styles from './x.module.scss'`
     parser: { 'css/module': { namedExports: false } },
     generator: { 'css/module': { localIdentName: '[local]-[hash:6]' } },
     rules: [
+      { test: /\.module\.scss$/, type: 'css/module', use: [cssLoader, sassLoader] },
+      { test: /\.scss$/, exclude: /\.module\.scss$/, type: 'css', use: [cssLoader, sassLoader] },
+      // 仍保留 .css 规则：第三方包（如 katex/dist/katex.min.css）直接提供编译后的 CSS
       { test: /\.module\.css$/, type: 'css/module', use: [cssLoader] },
       { test: /\.css$/, exclude: /\.module\.css$/, type: 'css', use: [cssLoader] },
       {

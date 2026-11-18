@@ -53,7 +53,7 @@ import { closeSettings, useSettingsDialog, type SettingsSection } from './settin
 import { openPromptLibrary } from '../chatInput/promptLibraryState.js'
 import { UsageStatsCell } from './UsageStats.js'
 import { modelDisplayName } from '../../services/models.js'
-import styles from './Settings.module.css'
+import styles from './Settings.module.scss'
 
 /**
  * 设置弹窗：分「通用设置」（主题、语言、朗读音色、位置）与「数据管理」（API Key、导入、导出、删除）。

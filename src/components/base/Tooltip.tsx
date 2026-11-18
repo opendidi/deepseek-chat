@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useIsMobile } from '../../app/viewport.js'
 import { useAnchoredPosition, useDelayedOpen } from './anchored.js'
-import styles from './Tooltip.module.css'
+import styles from './Tooltip.module.scss'
 
 export type TooltipPlacement = 'top' | 'bottom'
 

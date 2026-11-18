@@ -4,7 +4,7 @@ import { FallbackImage } from './FallbackImage.js'
 import { IconLinkOutline14 } from '../base/icons.js'
 import type { Source } from '../../services/chat/view.js'
 import { safeWebUrl } from '../../utils/url.js'
-import styles from './SiteLogo.module.css'
+import styles from './SiteLogo.module.scss'
 
 /** 站点图标：加载中显示骨架，没有图标或加载失败时显示链接图标 */
 export const SiteLogo = ({

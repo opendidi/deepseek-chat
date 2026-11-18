@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { IconNotebookOutline16 } from '../base/icons.js'
 import type { PromptTemplate } from '../../services/prompts.js'
-import styles from './PromptMenu.module.css'
+import styles from './PromptMenu.module.scss'
 
 type Position = {
   left: number

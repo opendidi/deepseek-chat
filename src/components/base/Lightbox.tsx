@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16, IconDownloadOutline16 } from './icons.js'
 import { closeLightbox, useLightbox } from './lightboxState.js'
-import styles from './Lightbox.module.css'
+import styles from './Lightbox.module.scss'
 
 /** 下载当前图片：blob: 地址只用于下载，不用于顶层导航 */
 const download = (src: string, name: string) => {

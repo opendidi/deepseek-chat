@@ -3,7 +3,7 @@ import { useRef } from 'react'
 import type { MessageVersions } from '../../services/chat/branches.js'
 import { IconChevronRightOutline14 } from '../base/icons.js'
 import { IconButton } from '../base/IconButton.js'
-import styles from './BranchSwitcher.module.css'
+import styles from './BranchSwitcher.module.scss'
 
 export type { MessageVersions } from '../../services/chat/branches.js'
 export type SelectMessageVersion = (messageId: string, anchorTop: number) => void

@@ -11,7 +11,7 @@ import { showToast } from '../base/toastState.js'
 import { useAlive } from '../../utils/useAlive.js'
 import { copyText } from '../../utils/clipboard.js'
 import { MermaidDiagram } from './MermaidDiagram.js'
-import styles from './CodeBlock.module.css'
+import styles from './CodeBlock.module.scss'
 
 /** 代码块标题栏：左侧语言名，右侧复制 */
 const CodeInfoRow = ({

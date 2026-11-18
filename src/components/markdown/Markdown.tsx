@@ -4,8 +4,8 @@ import { toMdAst } from '../../services/markdown/parse.js'
 import { useScrollToBottom } from '../messages/scrollContext.js'
 import { MarkdownAstRenderer } from './MarkdownAstRenderer.js'
 import { useThrottleMarkdownRender } from './useThrottleMarkdownRender.js'
-import './markdown.css'
-import './highlight.css'
+import './markdown.scss'
+import './highlight.scss'
 
 /**
  * 渲染链路：节流 → 解析 AST → 渲染。

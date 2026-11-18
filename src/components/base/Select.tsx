@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAnchoredPosition, useDismiss } from './anchored.js'
 import { IconCheckOutline16, IconChevronDownOutline14 } from './icons.js'
-import styles from './Select.module.css'
+import styles from './Select.module.scss'
 
 export type SelectOption<T extends string> = { value: T; label: string; lang?: string }
 

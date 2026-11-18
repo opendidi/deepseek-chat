@@ -11,7 +11,7 @@ import {
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { closePromptLibrary, usePromptLibrary } from './promptLibraryState.js'
-import styles from './PromptLibrary.module.css'
+import styles from './PromptLibrary.module.scss'
 
 /** 提示词库：列表管理（新建 / 编辑 / 删除）。使用入口在输入框的斜杠菜单 */
 export const PromptLibrary = () => {

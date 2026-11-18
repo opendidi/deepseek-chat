@@ -33,8 +33,8 @@ import { Tooltip } from '../base/Tooltip.js'
 import { Markdown } from '../markdown/Markdown.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
-import styles from './ReplyArea.module.css'
-import './thinking.markdown.css'
+import styles from './ReplyArea.module.scss'
+import './thinking.markdown.scss'
 
 /** 进行中时每秒刷新，用于思考用时与搜索词轮播 */
 const useTicker = (active: boolean, interval: number) => {

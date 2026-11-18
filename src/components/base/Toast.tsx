@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { useTranslate } from '../../i18n/index.js'
 import { IconToastError16 } from './icons.js'
 import { useToast } from './toastState.js'
-import styles from './Toast.module.css'
+import styles from './Toast.module.scss'
 
 export const Toast = () => {
   const t = useTranslate()
