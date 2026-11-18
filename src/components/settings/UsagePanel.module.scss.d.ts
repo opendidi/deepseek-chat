@@ -4,9 +4,15 @@ declare const styles: {
   readonly actions: string
   readonly bar: string
   readonly barColumn: string
+  readonly barEmpty: string
   readonly bars: string
   readonly barsCompact: string
   readonly billingBox: string
+  readonly chartCard: string
+  readonly chartDivider: string
+  readonly chartMeta: string
+  readonly chartMetaDate: string
+  readonly chartMetaText: string
   readonly contextGrid: string
   readonly contextItem: string
   readonly empty: string
@@ -14,8 +20,18 @@ declare const styles: {
   readonly estimated: string
   readonly extra: string
   readonly extraGrid: string
+  readonly grid: string
+  readonly gridLine: string
   readonly header: string
   readonly heatCell: string
+  readonly heatCellVoid: string
+  readonly heatGridWrap: string
+  readonly heatInfo: string
+  readonly heatLeft: string
+  readonly heatRow: string
+  readonly heatStat: string
+  readonly heatStatTotal: string
+  readonly heatStatValue: string
   readonly heatmap: string
   readonly hint: string
   readonly inlineError: string
@@ -24,12 +40,16 @@ declare const styles: {
   readonly kpiLabel: string
   readonly kpiPrimary: string
   readonly kpiValue: string
+  readonly legend: string
+  readonly legendCell: string
   readonly level0: string
   readonly level1: string
   readonly level2: string
   readonly level3: string
   readonly linkButton: string
   readonly panel: string
+  readonly plot: string
+  readonly plotMain: string
   readonly priceRow: string
   readonly priceTable: string
   readonly progress: string
@@ -45,5 +65,11 @@ declare const styles: {
   readonly segments: string
   readonly subLabel: string
   readonly title: string
+  readonly weekLabels: string
+  readonly xAxis: string
+  readonly xAxisSpacer: string
+  readonly xLabel: string
+  readonly xLabels: string
+  readonly yAxis: string
 }
 export = styles

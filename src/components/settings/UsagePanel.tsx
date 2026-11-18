@@ -14,9 +14,22 @@ import { clearLedger } from '../../services/chat/usageLedger.js'
 import { closeSettings } from './settingsDialogState.js'
 import { SettingSwitch } from './settingsShared.js'
 import { showToast } from '../base/toastState.js'
+import {
+  axisLabel,
+  chartLabelIndices,
+  formatMoney,
+  formatNumber,
+  heatLevel,
+  metricText,
+  metricValue,
+  padHeatDays,
+  shortDate,
+  weekdayLabels,
+  type UsageMetric,
+} from '../../utils/usageChart.js'
 import styles from './UsagePanel.module.scss'
 
-type Metric = 'tokens' | 'cost' | 'replies'
+type Metric = UsageMetric
 
 const RANGES: { value: UsageRange; label: 'usageRangeToday' | 'usageRange7d' | 'usageRange30d' }[] = [
   { value: 'today', label: 'usageRangeToday' },
@@ -29,13 +42,6 @@ const METRICS: { value: Metric; label: 'usageMetricTokens' | 'usageMetricCost' |
   { value: 'cost', label: 'usageMetricCost' },
   { value: 'replies', label: 'usageMetricReplies' },
 ]
-
-const formatNumber = (value: number) => Math.round(value).toLocaleString()
-const formatMoney = (value: number) =>
-  `¥${value < 0.01 ? value.toFixed(4) : value.toFixed(2)}`
-
-const metricValue = (day: DetailedUsage['daily'][number], metric: Metric) =>
-  metric === 'tokens' ? day.tokens : metric === 'cost' ? day.cost : day.replies
 
 const download = (filename: string, content: string, type: string) => {
   const url = URL.createObjectURL(new Blob([content], { type }))
@@ -90,6 +96,18 @@ export const UsagePanel = () => {
     () => Math.max(1, ...(data?.daily.map((day) => metricValue(day, metric)) ?? [1])),
     [data, metric]
   )
+  const peakValue = useMemo(
+    () => Math.max(0, ...(data?.daily.map((day) => metricValue(day, metric)) ?? [0])),
+    [data, metric]
+  )
+  const peakDay = data?.daily.find((day) => metricValue(day, metric) === peakValue)
+  const activeDays = useMemo(
+    () => (data?.daily ?? []).filter((day) => metricValue(day, metric) > 0).length,
+    [data, metric]
+  )
+  const labelIndices = useMemo(() => chartLabelIndices(data?.daily.length ?? 0), [data])
+  const paddedDays = useMemo(() => padHeatDays(data?.daily ?? []), [data])
+  const weekLabels = weekdayLabels(data?.daily[0]?.date ?? '', t('usageWeekdays').split(''))
   const totals = data?.totals
   const context = data?.context
   const windowPercent = context
@@ -200,43 +218,120 @@ export const UsagePanel = () => {
                 ))}
               </div>
             </div>
-            <div className={clsx(styles.bars, data.daily.length > 7 && styles.barsCompact)}>
-              {data.daily.map((day) => {
-                const value = metricValue(day, metric)
-                return (
-                  <div key={day.date} className={styles.barColumn} title={`${day.date}: ${value}`}>
-                    <div
-                      className={styles.bar}
-                      style={{
-                        height:
-                          value === 0
-                            ? 0
-                            : `${Math.max(2, Math.round((value / maxDaily) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-            {data.daily.length > 7 ? (
-              <>
-                <div className={styles.subLabel}>{t('usageHeatmapTitle')}</div>
-                <div className={styles.heatmap}>
-                  {data.daily.map((day) => {
-                    const value = metricValue(day, metric)
-                    const ratio = value / maxDaily
-                    const level = value === 0 ? 0 : ratio > 0.6 ? 3 : ratio > 0.25 ? 2 : 1
-                    return (
-                      <span
-                        key={day.date}
-                        className={clsx(styles.heatCell, HEAT_LEVELS[level])}
-                        title={`${day.date}: ${value}`}
-                      />
-                    )
-                  })}
+            <div className={styles.chartCard}>
+              <div className={styles.chartMeta}>
+                <span className={styles.chartMetaText}>
+                  {peakValue > 0 && peakDay
+                    ? t('usageChartPeak', {
+                        value: metricText(peakValue, metric),
+                        date: shortDate(peakDay.date),
+                      })
+                    : t('usageChartNoData')}
+                </span>
+                {data.daily.length > 1 ? (
+                  <span className={styles.chartMetaDate}>
+                    {shortDate(data.daily[0]?.date ?? '')} –{' '}
+                    {shortDate(data.daily[data.daily.length - 1]?.date ?? '')}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className={styles.plot}>
+                <div className={styles.yAxis}>
+                  <span>{axisLabel(maxDaily, metric)}</span>
+                  <span>{axisLabel(maxDaily / 2, metric)}</span>
+                  <span>{axisLabel(0, metric)}</span>
                 </div>
-              </>
-            ) : null}
+                <div className={styles.plotMain}>
+                  <div className={styles.grid}>
+                    <span className={styles.gridLine} />
+                    <span className={styles.gridLine} />
+                    <span className={styles.gridLine} />
+                  </div>
+                  <div className={clsx(styles.bars, data.daily.length > 7 && styles.barsCompact)}>
+                    {data.daily.map((day) => {
+                      const value = metricValue(day, metric)
+                      return (
+                        <div
+                          key={day.date}
+                          className={styles.barColumn}
+                          title={`${day.date}: ${metricText(value, metric)}`}
+                        >
+                          <div
+                            className={clsx(styles.bar, value === 0 && styles.barEmpty)}
+                            style={{
+                              height:
+                                value === 0 ? 2 : `${Math.max(3, Math.round((value / maxDaily) * 100))}%`,
+                            }}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.xAxis}>
+                <span className={styles.xAxisSpacer} />
+                <div className={styles.xLabels}>
+                  {data.daily.map((day, index) => (
+                    <span key={day.date} className={styles.xLabel}>
+                      {labelIndices.has(index) ? shortDate(day.date) : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {data.daily.length > 7 ? (
+                <>
+                  <div className={styles.chartDivider} />
+                  <div className={styles.heatRow}>
+                    <div className={styles.heatLeft}>
+                      <span className={styles.subLabel}>{t('usageHeatmapTitle')}</span>
+                      <div className={styles.heatGridWrap}>
+                        <div className={styles.weekLabels}>
+                          {weekLabels.map((label, index) => (
+                            <span key={index}>{label}</span>
+                          ))}
+                        </div>
+                        <div className={styles.heatmap}>
+                          {paddedDays.map((day, index) => {
+                            if (!day) {
+                              return <span key={`void-${index}`} className={styles.heatCellVoid} />
+                            }
+                            const value = metricValue(day, metric)
+                            return (
+                              <span
+                                key={day.date}
+                                className={clsx(
+                                  styles.heatCell,
+                                  HEAT_LEVELS[heatLevel(value, maxDaily)]
+                                )}
+                                title={`${day.date}: ${metricText(value, metric)}`}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={styles.heatInfo}>
+                      <div className={styles.heatStat}>
+                        <span className={styles.heatStatValue}>{activeDays}</span>
+                        <span className={styles.heatStatTotal}>/ {data.daily.length}</span>
+                      </div>
+                      <span className={styles.subLabel}>{t('usageActiveDaysLabel')}</span>
+                      <div className={styles.legend}>
+                        <span>{t('usageHeatLess')}</span>
+                        {HEAT_LEVELS.map((level, index) => (
+                          <span key={index} className={clsx(styles.legendCell, level)} />
+                        ))}
+                        <span>{t('usageHeatMore')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </section>
 
           <section className={styles.section}>

@@ -117,7 +117,91 @@
   line-height: 18px;
 }
 
+/* ---- 每日消耗：带坐标轴、网格与日期刻度的柱状图 ---- */
+.chartCard {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background-color: var(--dsw-alias-bg-base);
+}
+
+.chartMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chartMetaText {
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chartMetaDate {
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.plot {
+  display: flex;
+  gap: 6px;
+}
+
+.yAxis {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  width: 42px;
+  padding-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 12px;
+  text-align: right;
+}
+
+.plotMain {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.gridLine {
+  height: 0;
+  border-top: 1px dashed var(--dsw-alias-border-l3);
+  opacity: 0.8;
+}
+
+.gridLine:last-child {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  opacity: 1;
+}
+
 .bars {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-end;
   gap: 4px;
@@ -127,46 +211,195 @@
 .barColumn {
   display: flex;
   flex: 1;
+  min-width: 0;
   align-items: flex-end;
+  justify-content: center;
   height: 100%;
 }
 
 .bar {
   width: 100%;
-  border-radius: 3px 3px 0 0;
+  max-width: 26px;
+  border-radius: 3px 3px 1px 1px;
   background-color: var(--dsw-alias-brand-primary);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 75%);
+  transition: filter 0.15s ease;
+}
+
+.barColumn:hover .bar {
+  filter: brightness(1.12);
+}
+
+/* 无数据的日子也留一条贴底浅色占位，避免图表中段一整片空白 */
+.barEmpty {
+  border-radius: 1px;
+  background-color: var(--dsw-alias-border-l2);
+  background-image: none;
+}
+
+.xAxis {
+  display: flex;
+  gap: 6px;
+}
+
+.xAxisSpacer {
+  flex-shrink: 0;
+  width: 42px;
+}
+
+.xLabels {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+
+.xLabel {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.xLabel:first-child {
+  text-align: left;
+}
+
+.xLabel:last-child {
+  text-align: right;
+}
+
+.chartDivider {
+  height: 1px;
+  margin: 2px 0;
+  background-color: var(--dsw-alias-border-l1);
+}
+
+/* ---- 活动热力图：星期标签 + 整周网格 + 图例 ---- */
+.heatRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.heatLeft {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.heatGridWrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.weekLabels {
+  display: grid;
+  grid-template-rows: repeat(7, 13px);
+  gap: 3px;
+  width: 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+
+  span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .heatmap {
   display: grid;
-  grid-template-rows: repeat(7, 12px);
+  grid-template-rows: repeat(7, 13px);
   grid-auto-flow: column;
-  grid-auto-columns: 12px;
+  grid-auto-columns: 13px;
   gap: 3px;
   width: fit-content;
 }
 
-.heatCell {
-  width: 12px;
-  height: 12px;
+.heatCell,
+.heatCellVoid,
+.legendCell {
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
   border-radius: 3px;
+}
+
+.heatCell,
+.legendCell {
   background-color: var(--dsw-alias-brand-primary);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  transition: transform 0.12s ease;
+}
+
+.heatCell:hover {
+  transform: scale(1.18);
+}
+
+.heatCellVoid {
+  background: none;
 }
 
 .level0 {
   background-color: var(--dsw-alias-bg-skeleton);
+  box-shadow: none;
 }
 
 .level1 {
-  opacity: 0.35;
+  opacity: 0.38;
 }
 
 .level2 {
-  opacity: 0.65;
+  opacity: 0.68;
 }
 
 .level3 {
   opacity: 1;
+}
+
+.heatInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.heatStat {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.heatStatValue {
+  color: var(--dsw-alias-brand-text);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.heatStatTotal {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 12px;
 }
 
 .empty,
@@ -340,7 +573,7 @@
 }
 
 .barsCompact {
-  height: 54px;
+  height: 60px;
 }
 
 .inlineError {
