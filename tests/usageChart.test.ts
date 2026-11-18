@@ -2,14 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   axisLabel,
+  calendarCells,
   chartLabelIndices,
+  dayOfMonth,
   formatMoney,
   heatLevel,
   metricText,
   metricValue,
-  padHeatDays,
   shortDate,
-  weekdayLabels,
 } from '../src/utils/usageChart.js'
 
 test('Y 轴刻度按指标缩写', () => {
@@ -37,41 +37,38 @@ test('日期缩写与坐标轴刻度索引', () => {
   assert.deepEqual([...chartLabelIndices(30)], [0, 8, 15, 23, 29])
 })
 
-test('热力图补齐到整周且按峰值分四级', () => {
-  const days = Array.from({ length: 30 }, (_, index) => ({
-    date: `2026-11-${String(index + 1).padStart(2, '0')}`,
-    tokens: 0,
-    cost: 0,
-    replies: 0,
-  }))
-  const padded = padHeatDays(days)
-  assert.equal(padded.length, 35)
-  assert.equal(padded[30], null)
-  assert.equal(padded.filter((day) => day !== null).length, 30)
+test('热力图按峰值分四级', () => {
   assert.equal(heatLevel(0, 100), 0)
   assert.equal(heatLevel(20, 100), 1)
   assert.equal(heatLevel(50, 100), 2)
   assert.equal(heatLevel(80, 100), 3)
 })
 
-test('星期标签按首日星期轮换', () => {
-  // 2026-11-18 是周三：第一行从「三」开始
-  assert.deepEqual(weekdayLabels('2026-11-18', '一二三四五六日'.split('')), [
-    '三',
-    '四',
-    '五',
-    '六',
-    '日',
-    '一',
-    '二',
-  ])
-  assert.deepEqual(weekdayLabels('', 'MTWTFSS'.split('')), [
-    'M',
-    'T',
-    'W',
-    'T',
-    'F',
-    'S',
-    'S',
-  ])
+test('日历格子按周一补前置空格并补齐整周', () => {
+  // 2026-11-18 是周三，前面补周一、周二两个空格
+  const days = ['2026-11-18', '2026-11-19', '2026-11-20'].map((date) => ({
+    date,
+    tokens: 1,
+    cost: 0,
+    replies: 1,
+  }))
+  const cells = calendarCells(days)
+  assert.equal(cells.length, 7)
+  assert.equal(cells[0], null)
+  assert.equal(cells[1], null)
+  assert.equal(cells[2]?.date, '2026-11-18')
+  assert.equal(cells[4]?.date, '2026-11-20')
+  assert.equal(cells[5], null)
+  assert.equal(cells[6], null)
+  assert.equal(dayOfMonth('2026-11-08'), '8')
+  assert.equal(dayOfMonth('2026-11-18'), '18')
+})
+
+test('30 天日历保持整周且真实天数不变', () => {
+  const days = Array.from({ length: 30 }, (_, index) => ({
+    date: `2026-11-${String(index + 1).padStart(2, '0')}`,
+  }))
+  const cells = calendarCells(days)
+  assert.equal(cells.length % 7, 0)
+  assert.equal(cells.filter((cell) => cell !== null).length, 30)
 })

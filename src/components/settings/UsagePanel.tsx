@@ -16,15 +16,15 @@ import { SettingSwitch } from './settingsShared.js'
 import { showToast } from '../base/toastState.js'
 import {
   axisLabel,
+  calendarCells,
   chartLabelIndices,
+  dayOfMonth,
   formatMoney,
   formatNumber,
   heatLevel,
   metricText,
   metricValue,
-  padHeatDays,
   shortDate,
-  weekdayLabels,
   type UsageMetric,
 } from '../../utils/usageChart.js'
 import styles from './UsagePanel.module.scss'
@@ -106,8 +106,8 @@ export const UsagePanel = () => {
     [data, metric]
   )
   const labelIndices = useMemo(() => chartLabelIndices(data?.daily.length ?? 0), [data])
-  const paddedDays = useMemo(() => padHeatDays(data?.daily ?? []), [data])
-  const weekLabels = weekdayLabels(data?.daily[0]?.date ?? '', t('usageWeekdays').split(''))
+  const calendarDays = useMemo(() => calendarCells(data?.daily ?? []), [data])
+  const weekNames = t('usageWeekdays').trim().split(/\s+/)
   const totals = data?.totals
   const context = data?.context
   const windowPercent = context
@@ -285,41 +285,41 @@ export const UsagePanel = () => {
               {data.daily.length > 7 ? (
                 <>
                   <div className={styles.chartDivider} />
-                  <div className={styles.heatRow}>
-                    <div className={styles.heatLeft}>
+                  <div className={styles.heatBlock}>
+                    <div className={styles.heatHead}>
                       <span className={styles.subLabel}>{t('usageHeatmapTitle')}</span>
-                      <div className={styles.heatGridWrap}>
-                        <div className={styles.weekLabels}>
-                          {weekLabels.map((label, index) => (
-                            <span key={index}>{label}</span>
-                          ))}
-                        </div>
-                        <div className={styles.heatmap}>
-                          {paddedDays.map((day, index) => {
-                            if (!day) {
-                              return <span key={`void-${index}`} className={styles.heatCellVoid} />
-                            }
-                            const value = metricValue(day, metric)
-                            return (
-                              <span
-                                key={day.date}
-                                className={clsx(
-                                  styles.heatCell,
-                                  HEAT_LEVELS[heatLevel(value, maxDaily)]
-                                )}
-                                title={`${day.date}: ${metricText(value, metric)}`}
-                              />
-                            )
-                          })}
-                        </div>
-                      </div>
+                      <span className={styles.heatHeadStat}>
+                        <strong>{activeDays}</strong> / {data.daily.length}{' '}
+                        {t('usageActiveDaysLabel')}
+                      </span>
                     </div>
-                    <div className={styles.heatInfo}>
-                      <div className={styles.heatStat}>
-                        <span className={styles.heatStatValue}>{activeDays}</span>
-                        <span className={styles.heatStatTotal}>/ {data.daily.length}</span>
-                      </div>
-                      <span className={styles.subLabel}>{t('usageActiveDaysLabel')}</span>
+                    <div className={styles.calendarHeader}>
+                      {weekNames.map((name, index) => (
+                        <span key={index}>{name}</span>
+                      ))}
+                    </div>
+                    <div className={styles.heatmap}>
+                      {calendarDays.map((day, index) => {
+                        if (!day) {
+                          return <span key={`void-${index}`} className={styles.heatCellVoid} />
+                        }
+                        const value = metricValue(day, metric)
+                        return (
+                          <span
+                            key={day.date}
+                            className={clsx(
+                              styles.heatCell,
+                              HEAT_LEVELS[heatLevel(value, maxDaily)]
+                            )}
+                            title={`${day.date}: ${metricText(value, metric)}`}
+                          >
+                            <span className={styles.heatDay}>{dayOfMonth(day.date)}</span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                    <div className={styles.heatFooter}>
+                      <span className={styles.subLabel}>{t('usageHeatHint')}</span>
                       <div className={styles.legend}>
                         <span>{t('usageHeatLess')}</span>
                         {HEAT_LEVELS.map((level, index) => (

@@ -55,11 +55,23 @@ export const chartLabelIndices = (length: number): Set<number> => {
   ])
 }
 
-/** 热力图补齐到整周，末尾用 null 占位（不参与统计与 tooltip） */
-export const padHeatDays = <T>(days: T[]): (T | null)[] => {
-  const size = Math.ceil(days.length / 7) * 7
-  return Array.from({ length: size }, (_, index) => days[index] ?? null)
+/**
+ * 日历热力图：以周一为每周首列，前面按首日真实星期补空格，末尾补齐整周。
+ * 返回按行（每行 7 天一周）排列的格子，null 是范围外的占位。
+ */
+export const calendarCells = <T extends { date: string }>(days: T[]): (T | null)[] => {
+  if (days.length === 0) {
+    return []
+  }
+  const weekday = new Date(`${days[0].date}T00:00:00`).getDay()
+  const leading = Number.isFinite(weekday) ? (weekday + 6) % 7 : 0
+  const cells: (T | null)[] = [...Array<T | null>(leading).fill(null), ...days]
+  const trailing = (7 - (cells.length % 7)) % 7
+  return [...cells, ...Array<T | null>(trailing).fill(null)]
 }
+
+/** YYYY-MM-DD -> 日号（去掉前导零），用于日历格子内的数字 */
+export const dayOfMonth = (date: string) => String(Number(date.slice(-2)))
 
 /** 四级强度：0 表示当天无用量 */
 export const heatLevel = (value: number, max: number): 0 | 1 | 2 | 3 => {
@@ -70,12 +82,3 @@ export const heatLevel = (value: number, max: number): 0 | 1 | 2 | 3 => {
   return ratio > 0.6 ? 3 : ratio > 0.25 ? 2 : 1
 }
 
-/** 7 行网格的星期标签：按首日星期轮换（周一为 0） */
-export const weekdayLabels = (firstDate: string, names: string[]) => {
-  if (names.length === 0) {
-    return Array.from({ length: 7 }, () => '')
-  }
-  const parsed = firstDate ? new Date(`${firstDate}T00:00:00`).getDay() : 1
-  const start = (parsed + 6) % 7
-  return Array.from({ length: 7 }, (_, index) => names[(start + index) % names.length] ?? '')
-}

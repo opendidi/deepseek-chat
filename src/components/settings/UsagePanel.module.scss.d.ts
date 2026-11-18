@@ -8,6 +8,7 @@ declare const styles: {
   readonly bars: string
   readonly barsCompact: string
   readonly billingBox: string
+  readonly calendarHeader: string
   readonly chartCard: string
   readonly chartDivider: string
   readonly chartMeta: string
@@ -23,15 +24,13 @@ declare const styles: {
   readonly grid: string
   readonly gridLine: string
   readonly header: string
+  readonly heatBlock: string
   readonly heatCell: string
   readonly heatCellVoid: string
-  readonly heatGridWrap: string
-  readonly heatInfo: string
-  readonly heatLeft: string
-  readonly heatRow: string
-  readonly heatStat: string
-  readonly heatStatTotal: string
-  readonly heatStatValue: string
+  readonly heatDay: string
+  readonly heatFooter: string
+  readonly heatHead: string
+  readonly heatHeadStat: string
   readonly heatmap: string
   readonly hint: string
   readonly inlineError: string
@@ -65,7 +64,6 @@ declare const styles: {
   readonly segments: string
   readonly subLabel: string
   readonly title: string
-  readonly weekLabels: string
   readonly xAxis: string
   readonly xAxisSpacer: string
   readonly xLabel: string
