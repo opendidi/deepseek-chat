@@ -1,9 +1,9 @@
 /*
- * DeepSeek chat demo 的 Service Worker（纯静态资源，构建时原样复制，无需打包）。
+ * DeepSeek Chat 的 Service Worker（纯静态资源，构建时原样复制，无需打包）。
  * 策略：导航请求走网络优先（尽快拿到新版本页面），同源静态资源走缓存优先 + 后台更新；
  * 仅处理同源 GET，API 请求（跨源或流式）一律直连，不做任何缓存。
  */
-const CACHE = 'chat-demo-static-v1'
+const CACHE = 'deepseek-chat-static-v1'
 
 self.addEventListener('install', (event) => {
   // 不做预缓存：静态资源按需缓存，安装即激活

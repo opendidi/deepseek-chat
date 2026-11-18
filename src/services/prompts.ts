@@ -1,3 +1,4 @@
+import './storageKeys.js'
 import { create } from 'zustand'
 import { createId } from '../utils/id.js'
 import { useSettings } from './settings.js'
@@ -9,7 +10,7 @@ export type PromptTemplate = {
   content: string
 }
 
-const KEY = 'chat-demo:prompts'
+const KEY = 'deepseek-chat:prompts'
 const MAX_COUNT = 100
 const MAX_TITLE = 60
 const MAX_CONTENT = 4000

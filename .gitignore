@@ -6,6 +6,7 @@ build/
 .cache/
 *.log
 .DS_Store
+.workbuddy/
 .env
 .env.*
 !.env.example

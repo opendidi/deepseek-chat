@@ -1,4 +1,10 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import {
+  deleteDB,
+  openDB,
+  type DBSchema,
+  type IDBPDatabase,
+  type StoreNames,
+} from 'idb'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
 
 /** IndexedDB 存储结构版本；新增或调整存储、索引时递增。 */
@@ -43,6 +49,55 @@ interface ChatDB extends DBSchema {
   filesStaging: { key: string; value: StoredFile }
 }
 
+const DB_NAME = 'deepseek-chat'
+const LEGACY_DB_NAME = 'chat-demo'
+
+/**
+ * 数据库改名后把旧库数据一次性搬到新库：仅在新库为空时执行，且保留旧库作为备份。
+ * 搬运失败或旧库不存在都静默跳过，下次启动可重试，不会破坏任何已有数据。
+ */
+const migrateLegacyDB = async (db: IDBPDatabase<ChatDB>): Promise<void> => {
+  try {
+    if ((await db.count('sessions')) > 0) {
+      return
+    }
+    const listed = typeof indexedDB.databases === 'function' ? await indexedDB.databases() : null
+    if (listed && !listed.some((item) => item.name === LEGACY_DB_NAME)) {
+      return
+    }
+    const legacy = await openDB<ChatDB>(LEGACY_DB_NAME)
+    if (!legacy.objectStoreNames.contains('sessions')) {
+      legacy.close()
+      // databases() 不可用的浏览器里，openDB 会新建一个空库，用完即清掉
+      if (!listed) {
+        await deleteDB(LEGACY_DB_NAME).catch(() => {})
+      }
+      return
+    }
+    try {
+      const copyStore = async <Name extends StoreNames<ChatDB>>(name: Name): Promise<void> => {
+        const rows = await legacy.getAll(name)
+        if (rows.length === 0) {
+          return
+        }
+        const tx = db.transaction(name, 'readwrite')
+        await Promise.all(rows.map((row) => tx.store.put(row)))
+        await tx.done
+      }
+      await copyStore('sessions')
+      await copyStore('sessionSummaries')
+      await copyStore('files')
+      await copyStore('favorites')
+      await copyStore('sessionsStaging')
+      await copyStore('filesStaging')
+    } finally {
+      legacy.close()
+    }
+  } catch {
+    // 存储被禁用或搬运出错：保留旧库，下次再试
+  }
+}
+
 let dbPromise: Promise<IDBPDatabase<ChatDB>> | null = null
 
 const storedSummary = (session: Session): StoredSessionSummary => ({
@@ -66,7 +121,7 @@ const abortTransaction = (tx: { abort(): void }) => {
 
 // 每个操作拿到连接后立即创建事务；IndexedDB 按创建顺序执行范围重叠的事务，读取总能看到之前发起的写入。
 const getDB = () =>
-  (dbPromise ??= openDB<ChatDB>('chat-demo', DB_VERSION, {
+  (dbPromise ??= openDB<ChatDB>(DB_NAME, DB_VERSION, {
     upgrade(db, _oldVersion, _newVersion, tx) {
       // 初始化当前格式需要的存储与索引，不迁移旧消息。
       for (const name of [
@@ -87,11 +142,16 @@ const getDB = () =>
         summaries.createIndex('fileIds', 'fileIds', { multiEntry: true })
       }
     },
-  }).catch((error: unknown) => {
-    // 打开失败后允许界面重试，避免一直复用已拒绝的 Promise。
-    dbPromise = null
-    throw error
-  }))
+  })
+    .then(async (db) => {
+      await migrateLegacyDB(db)
+      return db
+    })
+    .catch((error: unknown) => {
+      // 打开失败后允许界面重试，避免一直复用已拒绝的 Promise。
+      dbPromise = null
+      throw error
+    }))
 
 export const loadSessionSummaries = async (): Promise<SessionSummary[]> =>
   (await (await getDB()).getAll('sessionSummaries')).map(toSessionSummary)

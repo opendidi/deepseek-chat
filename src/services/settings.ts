@@ -1,3 +1,4 @@
+import './storageKeys.js'
 import { create } from 'zustand'
 import type { ChatModel } from './api/types.js'
 import type { TtsVoice } from './api/speech.js'
@@ -11,6 +12,8 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 
 /** 界面整体字号档位；默认中等 */
 export type FontSizePreference = 's' | 'm' | 'l'
+
+import './storageKeys.js'
 
 /** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
 type Settings = {
@@ -53,28 +56,28 @@ type Settings = {
 }
 
 const KEYS = {
-  apiKey: 'chat-demo:api-key',
-  rememberApiKey: 'chat-demo:remember-api-key',
-  locale: 'chat-demo:locale',
-  location: 'chat-demo:location',
-  themePreference: 'chat-demo:theme-preference',
-  ttsVoice: 'chat-demo:tts-voice',
-  thinking: 'chat-demo:thinking',
-  search: 'chat-demo:search',
-  siderCollapsed: 'chat-demo:sider-collapsed',
-  chatModel: 'chat-demo:chat-model',
-  temperature: 'chat-demo:temperature',
-  topP: 'chat-demo:top-p',
-  maxTokens: 'chat-demo:max-tokens',
-  streamOutput: 'chat-demo:stream-output',
-  preventWithdraw: 'chat-demo:prevent-withdraw',
-  skipSafetyCheck: 'chat-demo:skip-safety-check',
-  continueAfterRefusal: 'chat-demo:continue-after-refusal',
-  autoCompress: 'chat-demo:auto-compress',
-  agentTools: 'chat-demo:agent-tools',
-  apiOrigin: 'chat-demo:api-origin',
-  systemPrompt: 'chat-demo:system-prompt',
-  fontSize: 'chat-demo:font-size',
+  apiKey: 'deepseek-chat:api-key',
+  rememberApiKey: 'deepseek-chat:remember-api-key',
+  locale: 'deepseek-chat:locale',
+  location: 'deepseek-chat:location',
+  themePreference: 'deepseek-chat:theme-preference',
+  ttsVoice: 'deepseek-chat:tts-voice',
+  thinking: 'deepseek-chat:thinking',
+  search: 'deepseek-chat:search',
+  siderCollapsed: 'deepseek-chat:sider-collapsed',
+  chatModel: 'deepseek-chat:chat-model',
+  temperature: 'deepseek-chat:temperature',
+  topP: 'deepseek-chat:top-p',
+  maxTokens: 'deepseek-chat:max-tokens',
+  streamOutput: 'deepseek-chat:stream-output',
+  preventWithdraw: 'deepseek-chat:prevent-withdraw',
+  skipSafetyCheck: 'deepseek-chat:skip-safety-check',
+  continueAfterRefusal: 'deepseek-chat:continue-after-refusal',
+  autoCompress: 'deepseek-chat:auto-compress',
+  agentTools: 'deepseek-chat:agent-tools',
+  apiOrigin: 'deepseek-chat:api-origin',
+  systemPrompt: 'deepseek-chat:system-prompt',
+  fontSize: 'deepseek-chat:font-size',
 } as const
 
 const read = (key: string) => {

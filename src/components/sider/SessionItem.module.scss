@@ -21,10 +21,14 @@
       background-color: var(--dsw-specific-sidebar-nav-item-hover);
     }
 
+    /* 菜单打开后鼠标移到浮层上，:hover 会失效；focus-within 让按钮保持可见 */
     &:hover,
+    &:focus-within,
     &.active {
       .action {
-        display: flex;
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
       }
     }
   }
@@ -39,10 +43,17 @@
   line-height: 18px;
 }
 
+/*
+ * 操作区始终占位：只用透明度/可见性控制显隐。
+ * 若用 display:none，鼠标移出列表项时锚点会变成零矩形，浮层定位会跳到视口左上角。
+ */
 .action {
-  display: none;
+  display: flex;
   flex-shrink: 0;
   margin-left: 4px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .renameInput {
@@ -61,7 +72,9 @@
 
 @media (hover: none) {
   .action {
-    display: flex;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
   }
 }
 

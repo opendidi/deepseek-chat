@@ -1,4 +1,6 @@
-const KEY = 'chat-demo:input-history'
+import '../storageKeys.js'
+
+const KEY = 'deepseek-chat:input-history'
 /** 最多保留的已发送消息条数 */
 const LIMIT = 50
 

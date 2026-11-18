@@ -1,4 +1,4 @@
-# chat-demo
+# deepseek-chat
 
 [English](README.md) | 简体中文
 
