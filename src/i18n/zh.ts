@@ -30,6 +30,8 @@ export const zh = {
   quote: '引用',
   quoteRemove: '移除引用',
   quoteFailed: '无法添加引用（内容重复或已达上限）',
+  loadEarlierMessages: '显示更早的 {count} 条消息',
+  renderError: '页面渲染出错，请刷新重试',
   send: '发送',
   editMessage: '编辑消息',
   regenerate: '重新生成',

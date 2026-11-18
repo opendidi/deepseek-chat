@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { errorStatus, SettingCell, SettingSwitch, type Status } from './settingsShared.js'
 import { useRef, useState, type ReactNode } from 'react'
 import {
   IconDarkOutline16,
@@ -13,7 +14,6 @@ import {
 import {
   ArchiveDecryptError,
   archiveIsEncrypted,
-  BackupError,
   clearHistory,
   exportHistory,
   importHistory,
@@ -43,7 +43,7 @@ import {
   useSettings,
   type ThemePreference,
 } from '../../services/settings.js'
-import { useTranslate, type TranslationKey, type TranslationMessage } from '../../i18n/index.js'
+import { useTranslate, type TranslationKey } from '../../i18n/index.js'
 import { useAlive } from '../../utils/useAlive.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
@@ -470,36 +470,6 @@ const TopPSetting = () => {
   )
 }
 
-const SettingSwitch = ({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string
-  description: string
-  checked: boolean
-  onChange: (value: boolean) => void
-}) => (
-  <SettingCell
-    label={label}
-    description={description}
-    status={null}
-    action={
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        className={clsx(styles.switch, checked && styles.switchOn)}
-        onClick={() => onChange(!checked)}
-      >
-        <span className={styles.switchThumb} />
-      </button>
-    }
-  />
-)
-
 /** 模型页的行为开关：每一项都对应请求组装或渲染链路上的真实分支 */
 const MODEL_SWITCH_FIELDS = [
   {
@@ -822,7 +792,6 @@ const ThemeSetting = () => {
 }
 
 /** `reason` 为失败原因的文案 key，展示时按当前语言翻译后填入 `message` 参数。 */
-type Status = (TranslationMessage & { error?: boolean; reason?: TranslationKey }) | null
 
 /** 导出失败附带原因：预期的错误用对应文案作原因，其他错误用错误信息。 */
 /** 关闭后 API Key 只在内存中，刷新页面即需重新输入。 */
@@ -847,46 +816,6 @@ const RememberApiKeySetting = () => {
         </button>
       }
     />
-  )
-}
-
-const errorStatus = (key: TranslationKey, error: unknown): Status => ({
-  key,
-  ...(error instanceof BackupError
-    ? { reason: error.key }
-    : { params: { message: error instanceof Error ? error.message : String(error) } }),
-  error: true,
-})
-
-const SettingCell = ({
-  label,
-  description,
-  status,
-  action,
-  className,
-}: {
-  label: string
-  description?: string
-  status: Status
-  action: ReactNode
-  className?: string
-}) => {
-  const t = useTranslate()
-  return (
-    <div className={clsx(styles.cell, styles.row, className)}>
-      <div className={styles.text}>
-        <div className={styles.label}>{label}</div>
-      </div>
-      {action}
-      {/* 说明/状态另起一行铺满，作为提示文字 */}
-      {status || description ? (
-        <div className={clsx(styles.description, status?.error && styles.error)}>
-          {status
-            ? t(status.key, status.reason ? { message: t(status.reason) } : status.params)
-            : description}
-        </div>
-      ) : null}
-    </div>
   )
 }
 

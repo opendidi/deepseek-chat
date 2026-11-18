@@ -119,6 +119,22 @@ export const createConfig = ({
           priority: 20,
           enforce: true,
         },
+        // 每种语言一个动态 import 会产生 90+ 个极小 chunk，合并成一块共享异步包
+        prismLanguages: {
+          test: /node_modules.prismjs.components./,
+          name: 'prism-languages',
+          chunks: 'async',
+          priority: 15,
+          enforce: true,
+        },
+        // Mermaid 自带几十个异步依赖，合并后按体积再切成若干块，兼顾请求数与单块大小
+        mermaidVendors: {
+          test: /node_modules.(mermaid|d3|dagre|cytoscape|elkjs|khroma|dompurify|lodash-es|@mermaid-js)/,
+          name: 'mermaid-vendors',
+          chunks: 'async',
+          priority: 10,
+          maxSize: 350 * 1024,
+        },
       },
     },
   },

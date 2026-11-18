@@ -17,14 +17,14 @@ import {
 import { createLatestReminder } from './latestReminder.js'
 import { reloadFavorites, removeFavoritesBySession } from './favorites.js'
 import { compressMessages } from './compress.js'
+import { runToolSteps } from './agentLoop.js'
 import { formatQuotedContent } from './quotes.js'
 import { readActiveSessionId, writeActiveSessionId } from './activeSession.js'
-import { clientToolParams, runClientTool } from '../agent/tools.js'
+import { clientToolParams } from '../agent/tools.js'
 import {
   applyEvent,
   canContinueReply,
   getContextRounds,
-  parseToolInput,
   settleReply,
   toRequestMessages,
   toToolTurnMessages,
@@ -1098,25 +1098,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             ),
           }
           flush()
-          const results = await Promise.all(
-            pending.map(async (step) => ({
-              id: step.id,
-              ...(await runClientTool(step.name, parseToolInput(step.inputJson), signal)),
-            }))
-          )
+          const resolved = await runToolSteps(pending, signal)
+          const resolvedById = new Map(resolved.map((step) => [step.id, step]))
           reply = {
             ...reply,
-            toolSteps: (reply.toolSteps ?? []).map((step) => {
-              const result = results.find((item) => item.id === step.id)
-              return result
-                ? {
-                    ...step,
-                    status: (result.isError ? 'error' : 'done') as ToolStep['status'],
-                    result: result.content,
-                    isError: result.isError,
-                  }
-                : step
-            }),
+            toolSteps: (reply.toolSteps ?? []).map((step) => resolvedById.get(step.id) ?? step),
           }
           flush()
         }

@@ -4,7 +4,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { addDraftQuote } from '../../services/chat/drafts.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { copyText } from '../../utils/clipboard.js'
-import { clampMenuPosition } from '../../utils/selectionMenu.js'
+import { clampMenuPosition, SELECTION_MENU_HEIGHT, SELECTION_MENU_WIDTH } from '../../utils/selectionMenu.js'
 import { IconCopyOutline16, IconQuoteOutline16 } from '../base/icons.js'
 import { showToast } from '../base/toastState.js'
 import styles from './SelectionMenu.module.scss'
@@ -41,6 +41,46 @@ export const SelectionMenu = () => {
     }
     document.addEventListener('contextmenu', onContextMenu)
     return () => document.removeEventListener('contextmenu', onContextMenu)
+  }, [])
+
+  // 触屏设备没有右键：长按选字、选区稳定后在选区上方浮出同一个菜单
+  useEffect(() => {
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      return
+    }
+    let timer = 0
+    const onSelectionChange = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        const selection = window.getSelection()
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+          setMenu(null)
+          return
+        }
+        const text = selection.toString().trim()
+        if (!text) {
+          setMenu(null)
+          return
+        }
+        const node = selection.anchorNode
+        const element = node instanceof Element ? node : node?.parentElement
+        if (!element?.closest('[data-message-id]')) {
+          setMenu(null)
+          return
+        }
+        const rect = selection.getRangeAt(0).getBoundingClientRect()
+        setMenu({
+          x: rect.left + rect.width / 2 - SELECTION_MENU_WIDTH / 2,
+          y: Math.max(0, rect.top - SELECTION_MENU_HEIGHT - 12),
+          text,
+        })
+      }, 240)
+    }
+    document.addEventListener('selectionchange', onSelectionChange)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('selectionchange', onSelectionChange)
+    }
   }, [])
 
   useEffect(() => {

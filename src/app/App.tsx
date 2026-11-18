@@ -22,6 +22,7 @@ import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { Lightbox } from '../components/base/Lightbox.js'
 import { Toast } from '../components/base/Toast.js'
 import { SelectionMenu } from '../components/messages/SelectionMenu.js'
+import { ErrorBoundary } from '../components/base/ErrorBoundary.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { Button } from '../components/base/Button.js'
@@ -168,11 +169,13 @@ export const App = () => {
                 </div>
               </div>
             ) : session ? (
-              <SessionView
-                session={session}
-                streaming={streaming}
-                siderCollapsed={siderCollapsed}
-              />
+              <ErrorBoundary>
+                <SessionView
+                  session={session}
+                  streaming={streaming}
+                  siderCollapsed={siderCollapsed}
+                />
+              </ErrorBoundary>
             ) : (
               <Welcome />
             )}

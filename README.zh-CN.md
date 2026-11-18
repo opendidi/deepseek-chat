@@ -36,6 +36,8 @@ pnpm build
 - 多会话、自动标题、重命名、置顶、删除；侧边栏搜索标题与正文（Ctrl/Cmd+K），对话内目录跳转。
 - 编辑提问、重新生成、切换消息分支、停止生成、符合条件的继续生成；跨会话收藏回答。
 - 当前会话 id 记录在地址栏 `#s=<id>`：刷新页面、复制链接或分享后仍停留在该会话。
+- 选中回复中的文字后右键可「引用 / 复制」：引用片段出现在输入框上方（可逐条删除、最多 6 条），提交时与提问一起发给模型，发送后引用区与提问气泡分开显示；触屏长按选字同样可用。
+- 长会话默认只渲染最近 60 条消息，顶部按钮可继续加载更早内容。
 
 ### 模型与生成参数
 
@@ -80,12 +82,16 @@ API Key 与设置保存在浏览器 localStorage；会话及附件原件保存�
 | `pnpm test`   | 编译并运行 node:test 单元测试                 |
 | `pnpm format` | oxfmt 格式化                                  |
 | `pnpm icons`  | 重新生成 PWA 图标到 `public/`                 |
+| `pnpm scss:types` | 为 CSS Modules 补齐 `*.module.scss.d.ts` |
+| `pnpm test:e2e` | 生产构建上的浏览器冒烟测试（需本机 Chrome） |
 
-样式全部使用 SCSS：组件样式为 `*.module.scss`（CSS Modules），全局样式为 `*.scss`。rspack 先用 `sass-loader` 编译，再交给 `builtin:lightningcss-loader` 按目标浏览器降级；第三方 CSS（如 KaTeX）仍走原有的 `.css` 规则。部分组件有手写 `*.module.scss.d.ts` 类型声明，其余由 `src/env.d.ts` 的通配声明兜底。
+样式全部使用 SCSS：组件样式为 `*.module.scss`（CSS Modules），全局样式为 `*.scss`。所有组件样式都有配套 `*.module.scss.d.ts`（手写或由 `pnpm scss:types` 生成），因此类名拼写错误会在类型检查阶段暴露。rspack 先用 `sass-loader` 编译，再交给 `builtin:lightningcss-loader` 按目标浏览器降级；第三方 CSS（如 KaTeX）仍走原有的 `.css` 规则。
 
 [rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`。`createConfig({ apiOrigin, devServer })` 支持自定义 API 地址和开发服务器代理；也可以在「设置 → 通用设置 → API 地址」里运行时覆盖。
 
 聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；语音使用 ASR / TTS 接口。请求包含搜索、链接阅读、标题、`latest_reminder` 等扩展，开启 Agent 时还会声明客户端工具；接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
+
+Prism 语言包与 Mermaid 依赖在构建时合并成少量异步块，避免产生几十个碎片请求。push 到 `main` 时 [CI](.github/workflows/pages.yml) 依次执行类型检查、lint、单元测试、构建和浏览器冒烟测试，然后发布 GitHub Pages。
 
 ```text
 src/

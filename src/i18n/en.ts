@@ -34,6 +34,8 @@ export const en = {
   quote: 'Quote',
   quoteRemove: 'Remove quote',
   quoteFailed: 'Could not add quote (duplicate or limit reached).',
+  loadEarlierMessages: 'Show {count} earlier messages',
+  renderError: 'Something went wrong while rendering. Please reload.',
   send: 'Send',
   editMessage: 'Edit message',
   regenerate: 'Regenerate',

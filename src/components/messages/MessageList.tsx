@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
+import { useTranslate } from '../../i18n/index.js'
 import {
   buildMessageVersions,
   getVisibleMessages,
@@ -12,6 +13,7 @@ import { AssistantMessage } from './AssistantMessage.js'
 import { ScrollToBottomContext } from './scrollContext.js'
 import { UserMessage } from './UserMessage.js'
 import type { Message } from '../../services/chat/types.js'
+import styles from './MessageList.module.scss'
 
 /**
  * 会话共用可重试的附件上传失败入口，覆盖当前提问与历史消息中的附件。
@@ -27,10 +29,11 @@ const getUploadRetryId = (messages: Message[], streaming: boolean) => {
     ? last.id
     : null
 }
-import styles from './MessageList.module.scss'
 
 /** 距底部小于该值时视为在底部，流式内容增长时跟随 */
 const STICKY_THRESHOLD = 40
+/** 长会话默认只渲染最近的消息，点击顶部按钮再向前加载一页 */
+const PAGE_SIZE = 60
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
 
 type MessageItemProps = {
@@ -80,15 +83,20 @@ const MessageItem = ({
 /**
  * 历史消息单独成树：流式期间只有最后一条消息对象会变，
  * 其余 props 保持稳定，memo 可直接跳过整列历史消息的 reconcile。
+ * startIndex 是分页后第一条在完整消息列表中的位置。
  */
 const HistoryItems = memo(function HistoryItems({
   messages,
+  startIndex,
   ...rest
-}: Omit<MessageItemProps, 'message' | 'index'> & { messages: Message[] }) {
+}: Omit<MessageItemProps, 'message' | 'index'> & {
+  messages: Message[]
+  startIndex: number
+}) {
   return (
     <>
-      {messages.map((message, index) => (
-        <MessageItem key={message.id} {...rest} message={message} index={index} />
+      {messages.map((message, i) => (
+        <MessageItem key={message.id} {...rest} message={message} index={startIndex + i} />
       ))}
     </>
   )
@@ -103,13 +111,16 @@ export const MessageList = ({
   streaming: boolean
   footer: React.ReactNode
 }) => {
+  const t = useTranslate()
   const isMobile = useIsMobile()
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const stickyRef = useRef(true)
   const scrollTopRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
+  const pendingScrollRef = useRef<number | null>(null)
   const messages = getVisibleMessages(session)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [previousVersions, setPreviousVersions] = useState(() =>
     buildMessageVersions(session, new Map())
   )
@@ -128,6 +139,28 @@ export const MessageList = ({
       scrollTopRef.current = el.scrollTop
     }
   }, [])
+
+  // 切换会话时回到默认分页
+  useLayoutEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [session.id])
+
+  // 向前加载后补上新增内容的高度，保持当前阅读位置不跳
+  useLayoutEffect(() => {
+    if (pendingScrollRef.current === null) {
+      return
+    }
+    const el = scrollRef.current
+    if (el) {
+      el.scrollTop += el.scrollHeight - pendingScrollRef.current
+    }
+    pendingScrollRef.current = null
+  }, [visibleCount])
+
+  const loadEarlier = () => {
+    pendingScrollRef.current = scrollRef.current?.scrollHeight ?? null
+    setVisibleCount((count) => count + PAGE_SIZE)
+  }
 
   // 内容、键盘和输入框高度变化时，继续遵循当前跟随状态。
   useLayoutEffect(() => {
@@ -202,18 +235,20 @@ export const MessageList = ({
 
   const lastIndex = messages.length - 1
   const uploadRetryId = getUploadRetryId(messages, streaming)
+  const startIndex = Math.max(0, messages.length - visibleCount)
+  const shown = messages.slice(startIndex)
   // 每帧都会生成新的可见消息数组，但历史消息对象本身引用不变；
   // 复用上一帧的历史前缀数组，让 memo 的历史子树在流式期间完全跳过。
   const historyRef = useRef<Message[]>([])
   const historyMessages = useMemo(() => {
-    const next = messages.slice(0, -1)
+    const next = shown.slice(0, -1)
     const previous = historyRef.current
     if (previous.length === next.length && previous.every((item, i) => item === next[i])) {
       return previous
     }
     historyRef.current = next
     return next
-  }, [messages])
+  }, [shown])
   const itemProps = {
     lastIndex,
     sessionId: session.id,
@@ -228,7 +263,12 @@ export const MessageList = ({
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
         <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
           <div ref={contentRef} className={styles.column}>
-            <HistoryItems messages={historyMessages} {...itemProps} />
+            {startIndex > 0 ? (
+              <button type="button" className={styles.loadEarlier} onClick={loadEarlier}>
+                {t('loadEarlierMessages', { count: startIndex })}
+              </button>
+            ) : null}
+            <HistoryItems messages={historyMessages} startIndex={startIndex} {...itemProps} />
             {lastMessage ? (
               <MessageItem {...itemProps} message={lastMessage} index={lastIndex} />
             ) : null}
