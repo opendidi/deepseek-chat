@@ -2,22 +2,24 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A static chat demo powered by the DeepSeek API. No application backend is required: the browser connects directly to the configured API service.
+A static chat front end powered by the DeepSeek API. No application backend is needed: the browser talks directly to the configured API service, and the API key stays on the device.
 
-You can [try the app online](https://deepseek-ai.github.io/chat-demo/) or download the archive from [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases), extract it, and double-click `index.html` to use it locally without installation or a build. Enter your API key in Settings before your first chat.
+- Upstream online demo: <https://deepseek-ai.github.io/chat-demo/>
+- Pushing to `main` builds and publishes GitHub Pages through `.github/workflows/pages.yml` (enable Pages in the repository settings).
+- You can also download a build from [Releases](https://github.com/opendidi/deepseek-chat/releases), extract it, and double-click `index.html` to run it locally without installing or building anything. Enter your API key in Settings before your first chat.
 
 ## Getting started
 
-Install Node.js 22.12+ and pnpm, then run:
+Install Node.js 22.12+ (CI uses 24) and pnpm, then run:
 
 ```sh
-git clone https://github.com/deepseek-ai/chat-demo.git
-cd chat-demo
+git clone https://github.com/opendidi/deepseek-chat.git
+cd deepseek-chat
 pnpm install
 pnpm dev
 ```
 
-Open http://localhost:8090.
+`pnpm dev` listens on `http://localhost:8090` and opens the browser automatically. If that port is taken, use `PORT=8091 pnpm dev`, or `PORT=auto pnpm dev` to let the dev server pick a free port.
 
 To build the static site:
 
@@ -25,25 +27,43 @@ To build the static site:
 pnpm build
 ```
 
-The output is written to `dist/`. Assets use relative paths, so you can point a static server's document root at `dist/` or host it under any subpath (for example GitHub Pages' `/chat-demo/`). You can also open `dist/index.html` directly; this requires browser support for storage on `file://` pages and an API service that permits their cross-origin requests. A meta CSP restricts script sources; enable gzip or brotli compression for JS/CSS when deploying.
+The output is written to `dist/`. Assets use relative paths, so you can point a static server's document root at `dist/` or host it under any subpath (for example GitHub Pages' `/deepseek-chat/`). You can also open `dist/index.html` directly; this requires browser support for storage on `file://` pages and an API service that permits their cross-origin requests. A meta CSP restricts script sources; enable gzip or brotli compression for JS/CSS when deploying.
 
 ## Features
 
-- Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.
-- Streaming replies, deep thinking, smart search, link reading, and source citations; stop generation or continue eligible replies.
-- Upload, paste, or drag and drop attachments; use voice input and read replies aloud. A live audio spectrum appears in the first row of the input area while recording on mobile.
-- Markdown, syntax highlighting, KaTeX math, and Mermaid diagrams.
-- Simplified Chinese and English, light and dark themes, mobile layouts, location settings, and chat history import and export.
-- Model switching (deepseek-flash / deepseek-v4-pro from the input area or Settings) plus adjustable temperature and max output tokens.
-- Custom instructions (persona), a prompt library, and slash commands in the input box (type `/` to insert).
-- Session pinning, sidebar search across titles and message contents (Ctrl/Cmd+K), and cross-chat favorites for replies.
-- In-chat outline for jumping to questions, click-to-zoom image viewer, and input history (press ↑/↓ in an empty input box).
-- Export a single chat as Markdown, a usage statistics panel, and password-encrypted archive export/import.
-- Font size setting, global shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, Ctrl/Cmd+, settings), and PWA install support.
+### Conversations
+
+- Multiple conversations with automatic titles, renaming, pinning, and deletion; sidebar search across titles and message contents (Ctrl/Cmd+K), and an in-chat outline for jumping to questions.
+- Edit prompts, regenerate replies, switch message branches, stop generation, and continue eligible replies; bookmark answers across chats.
+- The active conversation id lives in the URL hash (`#s=<id>`), so reloading, copying the link, or sharing it keeps you in the same chat.
+
+### Models and generation settings
+
+- Model panel in the input area: built-in DeepSeek Flash / V4 Pro with per-1M-token pricing, plus an optional model list fetched from `GET /models`.
+- Settings → Model shows the current model (read-only) and lets you adjust temperature, Top P, and max output tokens.
+- Behavior toggles: stream output, keep refused content, skip safety check, auto-compress long chats, and continue after refusal. The settings dialog is split into General / Model / Data.
+
+### Agent tools (off by default)
+
+- After enabling Settings → Model → Agent tools, the model can call browser-side tools and automatically run multiple "call → execute locally → return result" turns (up to 6, stoppable at any time).
+- Built-in tools: `get_current_time`, `calculate` (no `eval`), and `get_page_context`. Tool steps and results are shown in the reply.
+- When disabled, no client tools are declared and the chat stays a single ordinary request.
+
+### Input, reading, and interface
+
+- Upload, paste, or drag and drop attachments; voice input and read-aloud replies; a live audio spectrum while recording on mobile.
+- Custom instructions (persona), a prompt library with slash commands (type `/`), and input history (↑/↓ in an empty input box).
+- Markdown, syntax highlighting, KaTeX math, Mermaid diagrams, source citations, and a click-to-zoom image viewer.
+- Simplified Chinese and English, light and dark themes, font size, mobile layouts, location settings, PWA install, and usage statistics.
+- Global shortcuts: Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, Ctrl/Cmd+, settings.
+
+### Data migration
+
+- Export a single chat as Markdown; import/export history as ZIP, password-encrypted export (PBKDF2 + AES-256-GCM), and delete all conversations.
 
 ## Data and storage
 
-Your API key and settings are stored in the browser's localStorage. Conversations and original attachments are stored in IndexedDB. Local data is isolated by browser profile and site origin. In Settings → Data you can turn off "Remember API Key on this device"; the key then stays in memory only and must be re-entered after a reload. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
+Your API key and settings are stored in the browser's localStorage. Conversations and original attachments are stored in IndexedDB, isolated by browser profile and site origin. In Settings → Data you can turn off "Remember API Key on this device"; the key then stays in memory only and must be re-entered after a reload. The conversation id appears in the URL hash but contains no message content. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
 
 History import and export in Settings use ZIP archives. After confirmation and successful validation, importing replaces all local conversations and attachments. Exports include conversations and locally available original images, but exclude API keys, settings, and original non-image attachments. See the [history import/export documentation (Chinese)](src/services/chat/history/README.md) for the archive format and preservation details. Encrypted export wraps the ZIP in a password-protected container (PBKDF2 + AES-256-GCM); enter the export password to import it again.
 
@@ -51,19 +71,21 @@ Settings → Data → Delete all chats clears all local conversations, original 
 
 ## Development
 
-| Command       | Description                         |
-| ------------- | ----------------------------------- |
-| `pnpm dev`    | Start the development server        |
-| `pnpm build`  | Build into `dist/`                  |
-| `pnpm type`   | Run TypeScript type checks          |
-| `pnpm lint`   | Lint with oxlint                    |
-| `pnpm test`   | Run unit tests                      |
-| `pnpm format` | Format with oxfmt                   |
-| `pnpm icons`  | Regenerate PWA icons into `public/` |
+| Command       | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| `pnpm dev`    | Start the dev server (port 8090 by default; `PORT` overrides) |
+| `pnpm build`  | Build into `dist/`                                      |
+| `pnpm type`   | Run TypeScript type checks                              |
+| `pnpm lint`   | Lint with oxlint                                        |
+| `pnpm test`   | Compile and run node:test unit tests                    |
+| `pnpm format` | Format with oxfmt                                       |
+| `pnpm icons`  | Regenerate PWA icons into `public/`                     |
+
+All styles are SCSS: component styles use `*.module.scss` (CSS Modules) and global styles use `*.scss`. rspack compiles them with `sass-loader` and then downlevels them with `builtin:lightningcss-loader`; third-party CSS (such as KaTeX) still uses the plain `.css` rule. Some components have hand-written `*.module.scss.d.ts` declarations; the rest fall back to the wildcard declarations in `src/env.d.ts`.
 
 [rspack.config.ts](rspack.config.ts) uses `https://api.deepseek.com` by default. Use `createConfig({ apiOrigin, devServer })` to customize the API origin and development server proxy; the origin can also be overridden at runtime in Settings → General → API origin.
 
-Chat uses `deepseek-flash` by default through Anthropic-compatible Messages / Files APIs. Speech features use ASR / TTS endpoints. Requests include extensions for search, link reading, titles, and `latest_reminder`, so the configured service must support the corresponding capabilities. Supported attachment formats are determined by server-side validation.
+Chat uses `deepseek-flash` by default through Anthropic-compatible Messages / Files APIs. Speech features use ASR / TTS endpoints. Requests include extensions for search, link reading, titles, and `latest_reminder`, plus client tool declarations when Agent tools are enabled, so the configured service must support the corresponding capabilities. Supported attachment formats are determined by server-side validation.
 
 ```text
 src/
@@ -71,8 +93,9 @@ src/
   components/          Chat, settings, Markdown, and other UI components
   i18n/                English and Chinese translations
   services/
+    agent/             Client-side tool definitions and runner
     api/               API requests, SSE, and protocol types
-    chat/              Conversations, message branches, storage, and history import/export
+    chat/              Conversations, branches, storage, tool loop, history import/export
     markdown/          Markdown parsing, syntax highlighting, and diagrams
     speech/            Audio recording and read-aloud playback
   utils/               Shared utilities
