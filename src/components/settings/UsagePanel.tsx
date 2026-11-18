@@ -8,8 +8,8 @@ import {
   collectDetailedUsage,
   EXTRA_PRICES,
   type DetailedUsage,
-  type UsageRange,
 } from '../../services/chat/detailedUsage.js'
+import type { UsageRange } from '../../services/chat/usageRange.js'
 import { clearLedger } from '../../services/chat/usageLedger.js'
 import { closeSettings } from './settingsDialogState.js'
 import { SettingSwitch } from './settingsShared.js'

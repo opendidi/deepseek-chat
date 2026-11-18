@@ -6,8 +6,6 @@ import type { Message } from './types.js'
 import { ledgerInRange, readLedger } from './usageLedger.js'
 import { RANGE_DAYS, usageDates, type UsageRange } from './usageRange.js'
 
-export { RANGE_DAYS, usageDates, type UsageRange } from './usageRange.js'
-
 /** 附加用量单价（¥）；服务端搜索免费开关关闭时按旧规则计费 */
 export const EXTRA_PRICES = {
   legacySearch: 0.005, // 5 元 / 1000 次
