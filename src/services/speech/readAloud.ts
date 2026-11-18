@@ -3,6 +3,7 @@ import type { TranslationMessage } from '../../i18n/index.js'
 import { ApiError } from '../api/client.js'
 import { classifyApiError } from '../api/errors.js'
 import { synthesize, TTS_SAMPLE_RATE } from '../api/speech.js'
+import { recordTtsChars } from '../chat/usageLedger.js'
 import { useSettings } from '../settings.js'
 
 /**
@@ -89,6 +90,8 @@ export const toggleReadAloud = (
   if (reading === messageId) {
     return
   }
+  // 本机账本只累计字符数，不含正文
+  recordTtsChars(text)
   const controller = new AbortController()
   const context = new AudioContext({ sampleRate: TTS_SAMPLE_RATE })
   current = { controller, context }

@@ -75,6 +75,19 @@ export const IconQuoteOutline16 = () => (
   </svg>
 )
 
+/** 统计：三根柱形 */
+export const IconChartOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M2 13.5h12M3.5 13V9.5M7.5 13V5M11.5 13V7.5"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 export const IconDarkOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

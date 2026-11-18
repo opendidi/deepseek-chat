@@ -262,6 +262,37 @@ try {
     hasMessage: document.body.innerText.includes('可以。'),
   }))()`)
 
+  await evaluate(
+    `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === '设置').click()`
+  )
+  await sleep(250)
+  const statsTab = await evaluate(`(() => {
+    const tab = [...document.querySelectorAll('[role="tab"]')].find(b => b.innerText.trim() === '统计');
+    if (!tab) return false;
+    tab.click();
+    return true;
+  })()`)
+  await sleep(900)
+  const stats = await evaluate(`(() => {
+    const panel = document.querySelector('[role="tabpanel"]');
+    const text = panel?.innerText || '';
+    return {
+      tabs: [...document.querySelectorAll('[role="tab"]')].map(b => b.innerText.trim()),
+      hasTitle: text.includes('用量概览'),
+      hasKpi: text.includes('合计费用') && text.includes('输入 Token'),
+      hasRanges: text.includes('今天') && text.includes('7 天') && text.includes('30 天'),
+      hasBilling: text.includes('计费口径') && text.includes('服务端搜索与抓取免费'),
+      hasContext: text.includes('上下文统计管理'),
+      hasExports: text.includes('导出统计 JSON') && text.includes('导出 CSV'),
+      kpiCount: panel?.querySelectorAll('[class*="kpiValue-"]').length ?? 0,
+    };
+  })()`)
+  await evaluate(
+    `[...document.querySelectorAll('[role="tabpanel"] button')].find(b => b.innerText.trim() === '30 天').click()`
+  )
+  await sleep(700)
+  const heatCells = await evaluate(`document.querySelectorAll('[class*="heatCell-"]').length`)
+
   const checks = {
     cssLoaded: cssResponses.length > 0 && cssResponses.every((status) => status === 200),
     brandColor: styles.brand === '#3964fe',
@@ -270,10 +301,14 @@ try {
     menuItems: menuItems.join('/') === '引用/复制',
     quoteSubmitted: quoted.containsQuote,
     sessionRestored: restored.hash === hashBefore && !restored.welcome && restored.hasMessage,
+    statsTab: statsTab && stats.tabs.includes('统计'),
+    statsPanel: stats.hasTitle && stats.hasKpi && stats.hasRanges && stats.kpiCount >= 6,
+    statsBilling: stats.hasBilling && stats.hasContext && stats.hasExports,
+    statsHeatmap: heatCells > 0,
     noConsoleErrors: consoleErrors.length === 0,
   }
   const ok = Object.values(checks).every(Boolean)
-  console.log(JSON.stringify({ ok, checks, details: { styles, panel, cloudCount, menuItems, quoted, restored, consoleErrors } }, null, 2))
+  console.log(JSON.stringify({ ok, checks, details: { styles, panel, cloudCount, menuItems, quoted, restored, stats, heatCells, consoleErrors } }, null, 2))
   if (!ok) process.exitCode = 1
 } catch (error) {
   console.error(`[e2e] ${error.message}`)

@@ -47,6 +47,8 @@ type Settings = {
   autoCompress: boolean
   /** 允许模型调用浏览器端工具并自动执行多轮工具往返 */
   agentTools: boolean
+  /** 用量统计里服务端搜索/抓取是否按官方新规则免费 */
+  usageFreeServerTools: boolean
   /** 自定义 API 服务地址；null 使用构建期默认值 */
   apiOrigin: string | null
   /** 自定义系统提示词（人设），随每次请求发送；空串表示未设置 */
@@ -75,6 +77,7 @@ const KEYS = {
   continueAfterRefusal: 'deepseek-chat:continue-after-refusal',
   autoCompress: 'deepseek-chat:auto-compress',
   agentTools: 'deepseek-chat:agent-tools',
+  usageFreeServerTools: 'deepseek-chat:usage-free-server-tools',
   apiOrigin: 'deepseek-chat:api-origin',
   systemPrompt: 'deepseek-chat:system-prompt',
   fontSize: 'deepseek-chat:font-size',
@@ -220,6 +223,7 @@ export const useSettings = create<Settings>(() => ({
   continueAfterRefusal: initialFlag(KEYS.continueAfterRefusal, false),
   autoCompress: initialFlag(KEYS.autoCompress, false),
   agentTools: initialFlag(KEYS.agentTools, false),
+  usageFreeServerTools: initialFlag(KEYS.usageFreeServerTools, true),
   apiOrigin: initialApiOrigin(),
   systemPrompt: initialSystemPrompt(),
   fontSize: initialFontSize(),
@@ -317,6 +321,11 @@ export const setAutoCompress = (autoCompress: boolean) => {
 export const setAgentTools = (agentTools: boolean) => {
   write(KEYS.agentTools, String(agentTools))
   useSettings.setState({ agentTools })
+}
+
+export const setUsageFreeServerTools = (usageFreeServerTools: boolean) => {
+  write(KEYS.usageFreeServerTools, String(usageFreeServerTools))
+  useSettings.setState({ usageFreeServerTools })
 }
 
 export const setMaxTokens = (maxTokens: number | null) => {

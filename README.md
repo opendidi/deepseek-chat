@@ -62,6 +62,7 @@ The output is written to `dist/`. Assets use relative paths, so you can point a 
 ### Data migration
 
 - Export a single chat as Markdown; import/export history as ZIP, password-encrypted export (PBKDF2 + AES-256-GCM), and delete all conversations.
+- Settings → Usage: today / 7-day / 30-day views of estimated cost, tokens, model breakdown, top sessions and daily trends, plus extras, billing rules, estimated context usage and JSON / CSV export. Costs are estimated from official prices and peak hours; exact server-reported usage is shown in the KPIs.
 
 ## Data and storage
 

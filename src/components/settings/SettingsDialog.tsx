@@ -1,7 +1,8 @@
 import clsx from 'clsx'
 import { errorStatus, SettingCell, SettingSwitch, type Status } from './settingsShared.js'
-import { useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useRef, useState, type ReactNode } from 'react'
 import {
+  IconChartOutline16,
   IconDarkOutline16,
   IconDataOutline16,
   IconDownloadOutline16,
@@ -53,6 +54,11 @@ import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import { openPromptLibrary } from '../chatInput/promptLibraryState.js'
 import { UsageStatsCell } from './UsageStats.js'
+
+/** 统计分区按需加载：聚合逻辑与图表不进入首屏主包 */
+const UsagePanel = lazy(() =>
+  import('./UsagePanel.js').then((module) => ({ default: module.UsagePanel }))
+)
 import { modelDisplayName } from '../../services/models.js'
 import styles from './Settings.module.scss'
 
@@ -75,6 +81,11 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     value: 'model',
     label: 'settingDialogAsideModelOptionLabel',
     icon: <IconModelOutline14 />,
+  },
+  {
+    value: 'stats',
+    label: 'settingDialogAsideStatsOptionLabel',
+    icon: <IconChartOutline16 />,
   },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
@@ -138,6 +149,10 @@ const SettingsContent = () => {
               <MaxTokensSetting />
               <ModelSwitches />
             </>
+          ) : section === 'stats' ? (
+            <Suspense fallback={<div className={styles.usageEmpty}>{t('usageLoading')}</div>}>
+              <UsagePanel />
+            </Suspense>
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TranslationMessage } from '../../i18n/index.js'
 import { transcribe } from '../../services/api/speech.js'
 import { startRecording, type Recording } from '../../services/speech/recorder.js'
+import { recordAsrSeconds } from '../../services/chat/usageLedger.js'
 import { useSettings } from '../../services/settings.js'
 import { showToast } from '../base/toastState.js'
 
@@ -140,7 +141,11 @@ export const useVoiceInput = (onText: (text: string) => void) => {
     const timer = setInterval(() => {
       setSeconds(Math.floor((Date.now() - startedAt) / 1000))
     }, 500)
-    return () => clearInterval(timer)
+    return () => {
+      clearInterval(timer)
+      // 录音结束时把实际时长记入本机账本（不含音频内容）
+      recordAsrSeconds((Date.now() - startedAt) / 1000)
+    }
   }, [status])
 
   useEffect(() => cancelOperation, [cancelOperation])
