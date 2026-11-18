@@ -10,6 +10,11 @@ import {
   type UploadTask,
 } from '../attachments.js'
 import type { FileAttachment } from './types.js'
+import {
+  MAX_QUOTES,
+  normalizeQuoteText,
+  type Quote,
+} from './quotes.js'
 
 export type DraftAttachment = {
   /** 本地标识，也是 IndexedDB 原件与上传任务的 key */
@@ -19,9 +24,9 @@ export type DraftAttachment = {
   previewUrl: string | null
 }
 
-type Draft = { text: string; attachments: DraftAttachment[] }
+type Draft = { text: string; attachments: DraftAttachment[]; quotes: Quote[] }
 
-export const EMPTY_DRAFT: Draft = { text: '', attachments: [] }
+export const EMPTY_DRAFT: Draft = { text: '', attachments: [], quotes: [] }
 
 /** 草稿只保存在本次页面的内存中，独立于会话详情缓存；null 是新对话的草稿。 */
 export const useDrafts = create<{ drafts: Map<string | null, Draft> }>(() => ({
@@ -35,7 +40,7 @@ const updateDraft = (sessionId: string | null, update: (draft: Draft) => Draft) 
   useDrafts.setState((state) => {
     const draft = update(state.drafts.get(sessionId) ?? EMPTY_DRAFT)
     const drafts = new Map(state.drafts)
-    if (draft.text || draft.attachments.length > 0) {
+    if (draft.text || draft.attachments.length > 0 || draft.quotes.length > 0) {
       drafts.set(sessionId, draft)
     } else {
       drafts.delete(sessionId)
@@ -45,6 +50,29 @@ const updateDraft = (sessionId: string | null, update: (draft: Draft) => Draft) 
 
 export const setDraftText = (sessionId: string | null, text: string) =>
   updateDraft(sessionId, (draft) => ({ ...draft, text }))
+
+/** 添加一条引用；内容重复或已达上限时返回 false */
+export const addDraftQuote = (sessionId: string | null, text: string): boolean => {
+  const content = normalizeQuoteText(text)
+  if (!content) {
+    return false
+  }
+  const draft = getDraft(sessionId)
+  if (draft.quotes.length >= MAX_QUOTES || draft.quotes.some((item) => item.text === content)) {
+    return false
+  }
+  updateDraft(sessionId, (current) => ({
+    ...current,
+    quotes: [...current.quotes, { id: createId(), text: content }],
+  }))
+  return true
+}
+
+export const removeDraftQuote = (sessionId: string | null, id: string) =>
+  updateDraft(sessionId, (draft) => ({
+    ...draft,
+    quotes: draft.quotes.filter((item) => item.id !== id),
+  }))
 
 const upload = (attachment: DraftAttachment, apiKey: string) => {
   // 上传任务负责记录错误，输入框的附件卡片展示失败及重试入口。
@@ -95,10 +123,10 @@ export const retryDraftAttachment = (
   }
 }
 
-/** 发送按钮和实际提交共用规则：有内容，且全部附件已上传成功。 */
+/** 发送按钮和实际提交共用规则：有正文、附件或引用，且全部附件已上传成功。 */
 export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTask>) => {
   const text = draft.text.trim()
-  if (!text && draft.attachments.length === 0) {
+  if (!text && draft.attachments.length === 0 && draft.quotes.length === 0) {
     return null
   }
   const files: (FileAttachment & { serverId: string; blob: Blob })[] = []
@@ -117,7 +145,7 @@ export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTa
       blob: attachment.file,
     })
   }
-  return { text, files }
+  return { text, files, quotes: draft.quotes }
 }
 
 const releaseAttachment = (attachment: DraftAttachment, cancel: boolean) => {

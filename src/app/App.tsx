@@ -21,6 +21,7 @@ import { ensureApiKey, openSettings } from '../components/settings/settingsDialo
 import { SettingsDialog } from '../components/settings/SettingsDialog.js'
 import { Lightbox } from '../components/base/Lightbox.js'
 import { Toast } from '../components/base/Toast.js'
+import { SelectionMenu } from '../components/messages/SelectionMenu.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { Button } from '../components/base/Button.js'
@@ -182,6 +183,7 @@ export const App = () => {
       <SettingsDialog />
       <Lightbox />
       <PromptLibrary />
+      <SelectionMenu />
       <Toast />
     </>
   )

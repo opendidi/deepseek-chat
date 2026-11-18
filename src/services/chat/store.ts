@@ -17,6 +17,7 @@ import {
 import { createLatestReminder } from './latestReminder.js'
 import { reloadFavorites, removeFavoritesBySession } from './favorites.js'
 import { compressMessages } from './compress.js'
+import { formatQuotedContent } from './quotes.js'
 import { readActiveSessionId, writeActiveSessionId } from './activeSession.js'
 import { clientToolParams, runClientTool } from '../agent/tools.js'
 import {
@@ -629,7 +630,7 @@ export const sendMessage = (targetSessionId: string | null) => {
   if (!prepared) {
     return false
   }
-  const { text, files } = prepared
+  const { text, files, quotes } = prepared
   const now = Date.now()
   let sessionId = targetSessionId
   if (
@@ -663,7 +664,11 @@ export const sendMessage = (targetSessionId: string | null) => {
   const question: UserMessage = {
     id: createId(),
     role: 'user',
-    content: text,
+    // 引用内容用 Markdown 引用块拼在提问前面，随本轮一起发给模型
+    content: formatQuotedContent(
+      text,
+      quotes.map((quote) => quote.text)
+    ),
     files: files.map(({ id, serverId, name, size, isImage, mimeType }) => ({
       id,
       serverId,

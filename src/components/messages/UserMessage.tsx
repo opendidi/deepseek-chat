@@ -2,7 +2,7 @@ import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
-import { IconEditOutline16 } from '../base/icons.js'
+import { IconEditOutline16, IconQuoteOutline16 } from '../base/icons.js'
 import { editMessage, retryUpload } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import type { UserMessage as UserMessageType } from '../../services/chat/types.js'
@@ -16,6 +16,7 @@ import {
 } from './BranchSwitcher.js'
 import { MessageFile } from './MessageFile.js'
 import { CopyButton } from './CopyButton.js'
+import { formatQuotedContent, splitQuotedContent } from '../../services/chat/quotes.js'
 import styles from './UserMessage.module.scss'
 
 export const UserMessage = memo(function UserMessage({
@@ -39,11 +40,13 @@ export const UserMessage = memo(function UserMessage({
   onSelectVersion: SelectMessageVersion
 }) {
   const t = useTranslate()
+  // 引用与提问分开显示；编辑时只改提问，引用原样保留
+  const { quotes, text } = splitQuotedContent(message.content)
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(message.content)
+  const [draft, setDraft] = useState(text)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isMobile = useIsMobile()
-  const canSend = !busy && (draft.trim() !== '' || message.files.length > 0)
+  const canSend = !busy && (draft.trim() !== '' || message.files.length > 0 || quotes.length > 0)
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current
@@ -54,7 +57,8 @@ export const UserMessage = memo(function UserMessage({
   }, [editing, draft])
 
   const sendEdit = () => {
-    if (canSend && ensureApiKey() && editMessage(sessionId, message.id, draft.trim())) {
+    const next = formatQuotedContent(draft.trim(), quotes)
+    if (canSend && ensureApiKey() && editMessage(sessionId, message.id, next)) {
       stopReadAloud()
       setEditing(false)
     }
@@ -112,7 +116,24 @@ export const UserMessage = memo(function UserMessage({
         </div>
       ) : (
         <>
-          {message.content ? <div className={styles.bubble}>{message.content}</div> : null}
+          {quotes.length > 0 ? (
+            <div className={styles.quotes}>
+              {quotes.map((quote, index) => (
+                <div key={index} className={styles.quote}>
+                  <span
+                    className={styles.quoteIcon}
+                    role="img"
+                    aria-label={t('quote')}
+                    title={t('quote')}
+                  >
+                    <IconQuoteOutline16 />
+                  </span>
+                  <span className={styles.quoteText}>{quote}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {text ? <div className={styles.bubble}>{text}</div> : null}
           <div className={styles.bottom}>
             <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
               {message.content ? <CopyButton text={message.content} /> : null}
@@ -122,7 +143,7 @@ export const UserMessage = memo(function UserMessage({
                 tooltipPlacement="bottom"
                 disabled={busy}
                 onClick={() => {
-                  setDraft(message.content)
+                  setDraft(text)
                   setEditing(true)
                 }}
               />

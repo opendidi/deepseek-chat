@@ -56,6 +56,25 @@ export const IconCopyOutline16 = () => (
   </svg>
 )
 
+/** 引用：回转箭头，表示把回复片段带回输入框 */
+export const IconQuoteOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M5.5 3.25L2 6.75 5.5 10.25"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M2 6.75H9.25a3.5 3.5 0 0 1 3.5 3.5v2.5"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
 export const IconDarkOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

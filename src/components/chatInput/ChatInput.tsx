@@ -17,6 +17,7 @@ import {
   getDraft,
   prepareDraftMessage,
   removeDraftAttachment,
+  removeDraftQuote,
   retryDraftAttachment,
   setDraftText,
   useDrafts,
@@ -36,6 +37,7 @@ import { ModelPicker } from './ModelPicker.js'
 import { ACCEPT, MAX_COUNT, MAX_SIZE_MB, useUploads } from '../../services/attachments.js'
 import { usePrompts, type PromptTemplate } from '../../services/prompts.js'
 import { DraftAttachments } from './DraftAttachments.js'
+import { QuoteBar } from './QuoteBar.js'
 import { openPromptLibrary } from './promptLibraryState.js'
 import { PromptMenu } from './PromptMenu.js'
 import { useVoiceInput } from './useVoiceInput.js'
@@ -293,6 +295,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       }}
     >
       <DraftAttachments items={attachments} onRetry={retryFile} onRemove={removeFile} />
+      <QuoteBar
+        quotes={draft.quotes}
+        onRemove={(id) => removeDraftQuote(sessionId, id)}
+      />
       <div ref={textareaWrapperRef} className={styles.textareaWrapper}>
         <textarea
           ref={textareaRef}

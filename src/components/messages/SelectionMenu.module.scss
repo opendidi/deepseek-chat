@@ -1,0 +1,46 @@
+.menu {
+  position: fixed;
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  /* 贴合内容，避免两个选项之间出现大片空白 */
+  width: max-content;
+  height: 36px;
+  padding: 3px;
+  border-radius: 10px;
+  background-color: var(--dsw-specific-menu);
+  box-shadow:
+    0 0 1px rgba(0, 0, 0, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.14);
+}
+
+.option {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background-color: var(--dsw-alias-border-l2);
+}
