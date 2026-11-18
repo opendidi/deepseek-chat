@@ -60,10 +60,25 @@ export type TextPart = {
   citations?: TextCitation[]
   /** 服务端提示文案，仅用于展示，不作为模型回答参与上下文或续写。 */
   isTemplate?: boolean
+  /** Agent 多轮时标记新一轮正文起点，界面在此插入空行；不进入请求体 */
+  agentTurnStart?: boolean
 }
 
 /** 服务端工具调用与结果块按协议原样保存；历史请求只回传 read_link 调用与结果 */
 export type ReplyBlock = ThinkingPart | TextPart | ServerToolBlock
+
+/**
+ * 客户端工具调用步骤。与正文分开保存，避免改动 ReplyBlock 既有的渲染、归档与上下文链路；
+ * inputJson 由 input_json_delta 流式累积，执行后写入 result。
+ */
+export type ToolStep = {
+  id: string
+  name: string
+  inputJson: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  result?: string
+  isError?: boolean
+}
 
 /**
  * pending：已发出请求，还没收到事件；streaming：正在接收；
@@ -88,6 +103,8 @@ export type AssistantMessage = MessageBranch & {
   status: ReplyStatus
   /** 可识别的内容块按接收顺序排列；续写产生的块追加在已有块之后 */
   blocks: ReplyBlock[]
+  /** 客户端工具调用步骤；仅开启 Agent 工具的请求会产生 */
+  toolSteps?: ToolStep[]
   stopReason?: StopReason
   stopDetails?: StopDetails
   /** 最近一次请求的用量，续写后更新 */

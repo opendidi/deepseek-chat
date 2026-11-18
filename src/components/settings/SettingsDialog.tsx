@@ -24,6 +24,7 @@ import { regionCodes, getRegionName, provinces } from '../../services/location.j
 import {
   isChineseBrowser,
   setApiOrigin,
+  setAgentTools,
   setAutoCompress,
   setContinueAfterRefusal,
   setFontSize,
@@ -530,6 +531,12 @@ const MODEL_SWITCH_FIELDS = [
     label: 'settingsContinueAfterRefusal',
     desc: 'settingsContinueAfterRefusalDesc',
     set: setContinueAfterRefusal,
+  },
+  {
+    field: 'agentTools',
+    label: 'settingsAgentTools',
+    desc: 'settingsAgentToolsDesc',
+    set: setAgentTools,
   },
 ] as const
 

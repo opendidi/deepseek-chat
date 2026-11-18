@@ -5,6 +5,8 @@ import type {
   MessageStreamEvent,
   OutputBlockStart,
   TextBlockParam,
+  ToolResultBlockParam,
+  ToolUseBlock,
 } from '../api/types.js'
 import type {
   AssistantMessage,
@@ -12,6 +14,7 @@ import type {
   Message,
   ReplyBlock,
   ReplyStatus,
+  ToolStep,
   UserMessage,
 } from './types.js'
 
@@ -82,21 +85,45 @@ export const applyEvent = (
       return { ...next, usage: event.message.usage ?? next.usage }
     case 'content_block_start': {
       blockIndexes.delete(event.index)
+      if (event.content_block.type === 'tool_use') {
+        const step: ToolStep = {
+          id: event.content_block.id,
+          name: event.content_block.name,
+          inputJson: '',
+          status: 'pending',
+        }
+        const steps = [...(next.toolSteps ?? []), step]
+        // 负数编码区分「正文块索引」与「工具步骤索引」，复用同一个临时映射
+        blockIndexes.set(event.index, -steps.length)
+        return { ...next, prefix: false, toolSteps: steps }
+      }
       const block = toReplyBlock(event.content_block, now)
       if (!block) {
-        // 客户端工具内容不保存；未完成的工具往返也不能作为续写前缀。
-        return event.content_block.type === 'tool_use' ? { ...next, prefix: false } : next
+        return next
       }
       blockIndexes.set(event.index, next.blocks.length)
       return { ...next, blocks: [...next.blocks, block] }
     }
     case 'content_block_delta': {
-      const index = blockIndexes.get(event.index)
-      if (index === undefined) {
+      const mapped = blockIndexes.get(event.index)
+      if (mapped === undefined) {
         return next
       }
       const { delta } = event
-      return updateBlock(next, index, (block) => {
+      if (mapped < 0) {
+        if (delta.type !== 'input_json_delta') {
+          return next
+        }
+        const stepIndex = -mapped - 1
+        const steps = [...(next.toolSteps ?? [])]
+        const step = steps[stepIndex]
+        if (!step) {
+          return next
+        }
+        steps[stepIndex] = { ...step, inputJson: step.inputJson + delta.partial_json }
+        return { ...next, toolSteps: steps }
+      }
+      return updateBlock(next, mapped, (block) => {
         if (block.type === 'text' && delta.type === 'text_delta') {
           return { ...block, text: block.text + delta.text }
         }
@@ -113,12 +140,15 @@ export const applyEvent = (
       })
     }
     case 'content_block_stop': {
-      const index = blockIndexes.get(event.index)
-      if (index === undefined) {
+      const mapped = blockIndexes.get(event.index)
+      if (mapped === undefined) {
         return next
       }
       blockIndexes.delete(event.index)
-      return updateBlock(next, index, (block) =>
+      if (mapped < 0) {
+        return next
+      }
+      return updateBlock(next, mapped, (block) =>
         block.type === 'thinking' && block.startedAt !== undefined && block.endedAt === undefined
           ? { ...block, endedAt: now }
           : block
@@ -285,6 +315,55 @@ const toAssistantParam = (
     role: 'assistant',
     content: content.filter((block) => block.type !== 'text' || block.text !== ''),
   }
+}
+
+/** 工具入参由 input_json_delta 分片累积；解析失败时给空对象，交给工具自身报错 */
+export const parseToolInput = (inputJson: string): Record<string, unknown> => {
+  try {
+    const value: unknown = JSON.parse(inputJson || '{}')
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 一轮工具往返后追加到请求里的两条消息：完整 assistant 内容（本轮正文 + tool_use 块），
+ * 随后是携带 tool_result 的 user 消息。blockStart / stepStart 只取本轮新增内容，避免多轮重复回传。
+ */
+export const toToolTurnMessages = (
+  reply: AssistantMessage,
+  blockStart: number,
+  stepStart: number
+): MessageParam[] | null => {
+  const steps = (reply.toolSteps ?? []).slice(stepStart)
+  if (steps.length === 0) {
+    return null
+  }
+  const assistant = toAssistantParam(
+    { ...reply, blocks: reply.blocks.slice(blockStart) },
+    false,
+    false
+  )
+  assistant.content.push(
+    ...steps.map(
+      (step): ToolUseBlock => ({
+        type: 'tool_use',
+        id: step.id,
+        name: step.name,
+        input: parseToolInput(step.inputJson),
+      })
+    )
+  )
+  const results: ToolResultBlockParam[] = steps.map((step) => ({
+    type: 'tool_result',
+    tool_use_id: step.id,
+    content: step.result ?? '',
+    ...(step.isError ? { is_error: true } : {}),
+  }))
+  return [assistant, { role: 'user', content: results }]
 }
 
 /** 历史中会进入请求上下文的轮次：提问后紧跟可用回答的才保留 */

@@ -17,12 +17,15 @@ import {
 import { createLatestReminder } from './latestReminder.js'
 import { reloadFavorites, removeFavoritesBySession } from './favorites.js'
 import { compressMessages } from './compress.js'
+import { clientToolParams, runClientTool } from '../agent/tools.js'
 import {
   applyEvent,
   canContinueReply,
   getContextRounds,
+  parseToolInput,
   settleReply,
   toRequestMessages,
+  toToolTurnMessages,
 } from './reply.js'
 import {
   toSessionSummary,
@@ -31,6 +34,7 @@ import {
   type Message,
   type Session,
   type SessionSummary,
+  type ToolStep,
   type UserMessage,
 } from './types.js'
 
@@ -42,6 +46,8 @@ const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 const TEMPERATURE_RANGE = { min: 0, max: 2 } as const
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
+/** Agent 工具单轮对话最多连续发起的请求数，防止模型陷入工具循环 */
+const MAX_AGENT_TURNS = 6
 /** 安全审核固定开启，所有请求都走扩展模式 */
 const SAFETY_CHECK = { level: 'high' } as const
 /** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
@@ -1036,51 +1042,121 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const persona = systemPrompt.trim()
         const { messages, summary } = compressMessages(rawMessages, settings.autoCompress)
         const system = [SYSTEM_PROMPT, persona, summary].filter(Boolean).join('\n\n')
-        const events = streamMessage(
-          apiKey ?? '',
-          {
-            model: initial.model ?? DEFAULT_MODEL,
-            // 自定义人设与长对话摘要拼接在统一的助手身份说明之后
-            system,
-            messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            ...(settings.skipSafetyCheck ? {} : { safety_check: SAFETY_CHECK }),
-            tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
-            ...(temperature !== null &&
-            temperature >= TEMPERATURE_RANGE.min &&
-            temperature <= TEMPERATURE_RANGE.max
-              ? { temperature }
-              : {}),
-            ...(topP !== null && topP >= 0.01 && topP <= 1 ? { top_p: topP } : {}),
-            ...(maxTokens !== null && maxTokens > 0 ? { max_tokens: maxTokens } : {}),
-          },
-          controller.signal
-        )
-        const blockIndexes = new Map<number, number>()
-        for await (const event of events) {
-          receivedContent ||= event.type === 'content_block_start'
-          if (
-            event.type === 'message_delta' &&
-            (event.delta.stop_reason === 'end_turn' || event.delta.stop_reason === 'max_tokens') &&
-            event.delta.title?.trim() &&
-            titleRequests.has(controller) &&
-            !controller.signal.aborted &&
-            !get().importingHistory
-          ) {
-            const title = event.delta.title.trim()
-            updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
-            titleRequests.delete(controller)
+        let requestMessages = messages
+        const tools: CreateMessageRequest['tools'] = [
+          ...serverTools(initial.search ?? false),
+          ...(settings.agentTools ? clientToolParams() : []),
+        ]
+        /** 执行本轮工具，状态与结果写回回复供界面展示 */
+        const executeToolSteps = async (pending: ToolStep[], signal: AbortSignal) => {
+          reply = {
+            ...reply,
+            toolSteps: (reply.toolSteps ?? []).map((step) =>
+              step.status === 'pending' ? { ...step, status: 'running' as const } : step
+            ),
           }
-          reply = applyEvent(reply, event, Date.now(), blockIndexes)
-          // 关闭流式输出时中途不逐字刷新，结束时由 finally 一次性写入
-          if (settings.streamOutput) {
-            if (document.visibilityState === 'hidden') {
-              flush()
-            } else {
-              frame ||= requestAnimationFrame(flush)
+          flush()
+          const results = await Promise.all(
+            pending.map(async (step) => ({
+              id: step.id,
+              ...(await runClientTool(step.name, parseToolInput(step.inputJson), signal)),
+            }))
+          )
+          reply = {
+            ...reply,
+            toolSteps: (reply.toolSteps ?? []).map((step) => {
+              const result = results.find((item) => item.id === step.id)
+              return result
+                ? {
+                    ...step,
+                    status: (result.isError ? 'error' : 'done') as ToolStep['status'],
+                    result: result.content,
+                    isError: result.isError,
+                  }
+                : step
+            }),
+          }
+          flush()
+        }
+        for (let turn = 0; ; turn += 1) {
+          const blockStart = reply.blocks.length
+          const stepStart = (reply.toolSteps ?? []).length
+          const events = streamMessage(
+            apiKey ?? '',
+            {
+              model: initial.model ?? DEFAULT_MODEL,
+              // 自定义人设与长对话摘要拼接在统一的助手身份说明之后
+              system,
+              messages: requestMessages,
+              thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+              ...(settings.skipSafetyCheck ? {} : { safety_check: SAFETY_CHECK }),
+              tools,
+              ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
+              ...(temperature !== null &&
+              temperature >= TEMPERATURE_RANGE.min &&
+              temperature <= TEMPERATURE_RANGE.max
+                ? { temperature }
+                : {}),
+              ...(topP !== null && topP >= 0.01 && topP <= 1 ? { top_p: topP } : {}),
+              ...(maxTokens !== null && maxTokens > 0 ? { max_tokens: maxTokens } : {}),
+            },
+            controller.signal
+          )
+          const blockIndexes = new Map<number, number>()
+          for await (const event of events) {
+            receivedContent ||= event.type === 'content_block_start'
+            if (
+              event.type === 'message_delta' &&
+              (event.delta.stop_reason === 'end_turn' ||
+                event.delta.stop_reason === 'max_tokens') &&
+              event.delta.title?.trim() &&
+              titleRequests.has(controller) &&
+              !controller.signal.aborted &&
+              !get().importingHistory
+            ) {
+              const title = event.delta.title.trim()
+              updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
+              titleRequests.delete(controller)
+            }
+            reply = applyEvent(reply, event, Date.now(), blockIndexes)
+            // 关闭流式输出时中途不逐字刷新，结束时由 finally 一次性写入
+            if (settings.streamOutput) {
+              if (document.visibilityState === 'hidden') {
+                flush()
+              } else {
+                frame ||= requestAnimationFrame(flush)
+              }
             }
           }
+          if (turn > 0) {
+            const blocks = [...reply.blocks]
+            const firstText = blocks.findIndex(
+              (block, index) => index >= blockStart && block.type === 'text'
+            )
+            const target = blocks[firstText]
+            if (target?.type === 'text') {
+              blocks[firstText] = { ...target, agentTurnStart: true }
+              reply = { ...reply, blocks }
+            }
+          }
+          if (
+            !settings.agentTools ||
+            reply.stopReason !== 'tool_use' ||
+            turn + 1 >= MAX_AGENT_TURNS
+          ) {
+            break
+          }
+          const pending = (reply.toolSteps ?? []).filter((step) => step.status === 'pending')
+          if (pending.length === 0 || controller.signal.aborted) {
+            break
+          }
+          await executeToolSteps(pending, controller.signal)
+          const appended = toToolTurnMessages(reply, blockStart, stepStart)
+          if (!appended) {
+            break
+          }
+          requestMessages = [...requestMessages, ...appended]
+          reply = { ...reply, stopReason: undefined, status: 'streaming' }
         }
         reply = settleReply(reply, 'done', Date.now(), { keepRefusedContent })
         break

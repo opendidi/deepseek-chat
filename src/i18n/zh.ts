@@ -220,6 +220,13 @@ export const zh = {
     '上下文接近窗口上限时，把较早轮次折叠成本地摘要放进系统提示；只影响本次请求，不写入会话历史。',
   settingsContinueAfterRefusal: '拒绝后继续生成',
   settingsContinueAfterRefusalDesc: '开启后被安全审核拒绝的回复也显示「继续生成」按钮。',
+  settingsAgentTools: '启用 Agent 工具',
+  settingsAgentToolsDesc:
+    '允许模型调用浏览器端工具（当前时间、计算器、页面信息）并自动执行多轮工具往返；最多 6 轮，可随时停止。关闭时保持普通对话。',
+  agentToolSteps: '工具调用',
+  agentToolRunning: '执行中…',
+  agentToolDone: '已完成',
+  agentToolFailed: '执行失败',
   settingsDefaultPlaceholder: '默认',
   settingsInvalidNumber: '请输入有效数字',
   settingsApiOrigin: 'API 地址',

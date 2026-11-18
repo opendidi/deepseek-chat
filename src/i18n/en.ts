@@ -236,6 +236,13 @@ export const en = {
   settingsContinueAfterRefusal: 'Continue after refusal',
   settingsContinueAfterRefusalDesc:
     'Show the Continue button even when a reply was rejected by the safety check.',
+  settingsAgentTools: 'Enable Agent tools',
+  settingsAgentToolsDesc:
+    'Let the model call browser-side tools (current time, calculator, page info) and run multi-step tool turns automatically (up to 6). Off keeps normal chat.',
+  agentToolSteps: 'Tool calls',
+  agentToolRunning: 'Running…',
+  agentToolDone: 'Done',
+  agentToolFailed: 'Failed',
   settingsDefaultPlaceholder: 'Default',
   settingsInvalidNumber: 'Enter a valid number',
   settingsApiOrigin: 'API origin',

@@ -42,6 +42,8 @@ type Settings = {
   continueAfterRefusal: boolean
   /** 长会话请求前把较早轮次折叠成本地摘要，只影响本次请求 */
   autoCompress: boolean
+  /** 允许模型调用浏览器端工具并自动执行多轮工具往返 */
+  agentTools: boolean
   /** 自定义 API 服务地址；null 使用构建期默认值 */
   apiOrigin: string | null
   /** 自定义系统提示词（人设），随每次请求发送；空串表示未设置 */
@@ -69,6 +71,7 @@ const KEYS = {
   skipSafetyCheck: 'chat-demo:skip-safety-check',
   continueAfterRefusal: 'chat-demo:continue-after-refusal',
   autoCompress: 'chat-demo:auto-compress',
+  agentTools: 'chat-demo:agent-tools',
   apiOrigin: 'chat-demo:api-origin',
   systemPrompt: 'chat-demo:system-prompt',
   fontSize: 'chat-demo:font-size',
@@ -213,6 +216,7 @@ export const useSettings = create<Settings>(() => ({
   skipSafetyCheck: initialFlag(KEYS.skipSafetyCheck, false),
   continueAfterRefusal: initialFlag(KEYS.continueAfterRefusal, false),
   autoCompress: initialFlag(KEYS.autoCompress, false),
+  agentTools: initialFlag(KEYS.agentTools, false),
   apiOrigin: initialApiOrigin(),
   systemPrompt: initialSystemPrompt(),
   fontSize: initialFontSize(),
@@ -305,6 +309,11 @@ export const setContinueAfterRefusal = (continueAfterRefusal: boolean) => {
 export const setAutoCompress = (autoCompress: boolean) => {
   write(KEYS.autoCompress, String(autoCompress))
   useSettings.setState({ autoCompress })
+}
+
+export const setAgentTools = (agentTools: boolean) => {
+  write(KEYS.agentTools, String(agentTools))
+  useSettings.setState({ agentTools })
 }
 
 export const setMaxTokens = (maxTokens: number | null) => {

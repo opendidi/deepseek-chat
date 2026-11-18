@@ -152,12 +152,17 @@ class SourceRegistry {
  * 引用之后的空白（含换行）仍留在被引用的块里，所以 [citation:N] 插在块尾空白之前。
  */
 const joinTextBlocks = (
-  blocks: { text: string; citations?: TextCitation[] }[],
+  blocks: { text: string; citations?: TextCitation[]; agentTurnStart?: boolean }[],
   registry: SourceRegistry
 ) => {
   let markdown = ''
   let text = ''
   for (const block of blocks) {
+    // Agent 第二轮及之后的正文另起一段，避免中间说明与最终回答连成一行
+    if (block.agentTurnStart && text && !text.endsWith('\n\n')) {
+      text += '\n\n'
+      markdown += '\n\n'
+    }
     text += block.text
     const indexes = new Set<number>()
     for (const citation of block.citations ?? []) {
@@ -186,7 +191,12 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
   const steps: Step[] = []
   const mergedSearch = new Map<ServerToolKind, SearchStep>()
   let mergedThinking: ThinkingStep | null = null
-  let pendingText: { index: number; text: string; citations?: TextCitation[] }[] = []
+  let pendingText: {
+    index: number
+    text: string
+    citations?: TextCitation[]
+    agentTurnStart?: boolean
+  }[] = []
 
   // 来源编号按搜索结果、打开的网页在回复中出现的顺序，与正文引用无关
   for (const block of reply.blocks) {
@@ -232,7 +242,12 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
       mergedThinking = null
     }
     if (block.type === 'text') {
-      pendingText.push({ index, text: block.text, citations: block.citations })
+      pendingText.push({
+        index,
+        text: block.text,
+        citations: block.citations,
+        agentTurnStart: block.agentTurnStart,
+      })
       return
     }
     if (block.type === 'thinking') {

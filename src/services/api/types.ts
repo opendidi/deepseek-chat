@@ -119,8 +119,21 @@ export type ServerToolBlock =
   | WebSearchToolResultBlock
   | WebFetchToolResultBlock
 
-/** 用于识别客户端工具调用的内容块类型 */
-export type ToolUseBlock = { type: 'tool_use'; id: string; name: string; input: unknown }
+/** 用于识别客户端工具调用的内容块类型；请求回传时同样使用这个结构 */
+export type ToolUseBlock = {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
+/** 客户端工具执行结果，作为 user 消息的内容块回传 */
+export type ToolResultBlockParam = {
+  type: 'tool_result'
+  tool_use_id: string
+  content: string
+  is_error?: boolean
+}
 
 // ---------- 请求 ----------
 
@@ -153,12 +166,27 @@ export type AssistantBlockParam =
   | ServerToolUseBlockParam
   | WebSearchToolResultBlockParam
   | WebFetchToolResultBlockParam
+  | ToolUseBlock
+
+/**
+ * 客户端自定义工具：必须省略 type，服务端据此识别为客户端工具；
+ * 带 type 会被当成服务端工具，custom 等不支持的值返回 422。
+ */
+export type ClientToolParam = {
+  name: string
+  description?: string
+  input_schema: {
+    type: 'object'
+    properties: Record<string, unknown>
+    required?: string[]
+  }
+}
 
 /** 末尾 assistant 自动触发继续生成，无需 prefix 字段 */
 export type MessageParam =
   /** Chat Engine 扩展角色，位于对应 user 前；需服务端支持 latest_reminder。 */
   | { role: 'latest_reminder'; content: string }
-  | { role: 'user'; content: string | (FileBlockParam | TextBlockParam)[] }
+  | { role: 'user'; content: string | (FileBlockParam | TextBlockParam | ToolResultBlockParam)[] }
   | { role: 'assistant'; content: AssistantBlockParam[] }
 
 /** 开启联网搜索与边想边搜 */
@@ -178,7 +206,7 @@ export type CreateMessageRequest = {
   system: string
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
-  tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
+  tools: (DeepseekWebSearchTool | DeepseekReadUrlTool | ClientToolParam)[]
   /** 缺省时不携带，服务端按默认检查档处理 */
   safety_check?: { level: 'high' }
   title?: { enabled: boolean }
