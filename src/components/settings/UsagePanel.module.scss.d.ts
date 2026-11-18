@@ -7,7 +7,6 @@ declare const styles: {
   readonly barColumnActive: string
   readonly barEmpty: string
   readonly bars: string
-  readonly barsCompact: string
   readonly billingBox: string
   readonly calendarHeader: string
   readonly chartCard: string

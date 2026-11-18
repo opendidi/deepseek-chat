@@ -293,6 +293,19 @@ try {
   await sleep(700)
   const heatCells = await evaluate(`document.querySelectorAll('[class*="heatCell-"]').length`)
 
+  // 三个时间范围共用同一个绘图区高度，切换时柱状图不应忽高忽矮
+  const barHeights = {}
+  for (const label of ['今天', '7 天', '30 天']) {
+    await evaluate(
+      `[...document.querySelectorAll('[role="tabpanel"] button')].find(b => b.innerText.trim() === ${JSON.stringify(label)}).click()`
+    )
+    await sleep(650)
+    barHeights[label] = await evaluate(
+      `Math.round(document.querySelector('[class*="bars-"]').getBoundingClientRect().height)`
+    )
+  }
+  const barHeightValues = Object.values(barHeights)
+
   const checks = {
     cssLoaded: cssResponses.length > 0 && cssResponses.every((status) => status === 200),
     brandColor: styles.brand === '#3964fe',
@@ -305,10 +318,14 @@ try {
     statsPanel: stats.hasTitle && stats.hasKpi && stats.hasRanges && stats.kpiCount >= 6,
     statsBilling: stats.hasBilling && stats.hasContext && stats.hasExports,
     statsHeatmap: heatCells > 0,
+    statsBarHeightConsistent:
+      barHeightValues.length === 3 &&
+      barHeightValues[0] > 0 &&
+      barHeightValues.every((height) => height === barHeightValues[0]),
     noConsoleErrors: consoleErrors.length === 0,
   }
   const ok = Object.values(checks).every(Boolean)
-  console.log(JSON.stringify({ ok, checks, details: { styles, panel, cloudCount, menuItems, quoted, restored, stats, heatCells, consoleErrors } }, null, 2))
+  console.log(JSON.stringify({ ok, checks, details: { styles, panel, cloudCount, menuItems, quoted, restored, stats, heatCells, barHeights, consoleErrors } }, null, 2))
   if (!ok) process.exitCode = 1
 } catch (error) {
   console.error(`[e2e] ${error.message}`)

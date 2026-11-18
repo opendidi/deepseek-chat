@@ -287,7 +287,7 @@ export const UsagePanel = () => {
                     <span className={styles.gridLine} />
                     <span className={styles.gridLine} />
                   </div>
-                  <div className={clsx(styles.bars, data.daily.length > 7 && styles.barsCompact)}>
+                  <div className={styles.bars}>
                     {data.daily.map((day, index) => {
                       const value = metricValue(day, metric)
                       return (
