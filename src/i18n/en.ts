@@ -197,7 +197,7 @@ export const en = {
   modelBuiltinList: 'Using built-in model list',
   modelCloudList: 'Using cloud model list',
   modelUseBuiltin: 'Switch back',
-  modelPriceNote: 'Per 1M tokens: hit / input / output (off-peak), peak ×2',
+  modelPriceNote: 'Per 1M tokens: hit / input / output, peak ×2',
   modelPriceUnavailable: 'Pricing follows the server',
   modelFetchFailed: 'Could not fetch models; built-in list kept',
   modelNeedApiKey: 'Set your API key in Settings first',

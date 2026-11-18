@@ -17,6 +17,7 @@ import {
 import { createLatestReminder } from './latestReminder.js'
 import { reloadFavorites, removeFavoritesBySession } from './favorites.js'
 import { compressMessages } from './compress.js'
+import { readActiveSessionId, writeActiveSessionId } from './activeSession.js'
 import { clientToolParams, runClientTool } from '../agent/tools.js'
 import {
   applyEvent,
@@ -98,6 +99,34 @@ export const useChatStore = create<ChatState>(() => ({
 }))
 
 const { getState: get, setState: set } = useChatStore
+
+/**
+ * activeId 的任何变化都同步到地址栏：选中、新建、删除、导入历史、首次发消息创建会话全部覆盖。
+ * 手动修改 hash（含浏览器前进后退）时反向同步界面。
+ */
+if (typeof window !== 'undefined') {
+  let syncedActiveId = get().activeId
+  useChatStore.subscribe((state) => {
+    if (state.activeId !== syncedActiveId) {
+      syncedActiveId = state.activeId
+      writeActiveSessionId(state.activeId)
+    }
+  })
+  window.addEventListener('hashchange', () => {
+    const id = readActiveSessionId()
+    if (id === get().activeId) {
+      return
+    }
+    if (id && get().sessions.some((item) => item.id === id)) {
+      set({ activeId: id })
+      void ensureSessionLoaded(id)
+    } else {
+      set({ activeId: null })
+      // activeId 本来就是 null 时订阅不会写地址栏，这里显式清掉失效的 hash
+      writeActiveSessionId(null)
+    }
+  })
+}
 
 const sortSessions = (sessions: SessionSummary[]) =>
   [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
@@ -311,7 +340,15 @@ export const initChat = (): Promise<void> => {
     try {
       const summaries = await db.loadSessionSummaries()
       if (epoch === historyEpoch) {
-        set({ ready: true, sessions: sortSessions(summaries) })
+        // 刷新后按地址栏恢复上次打开的会话；id 已不存在时清掉 hash 回到欢迎页
+        const stored = readActiveSessionId()
+        const activeId = stored && summaries.some((item) => item.id === stored) ? stored : null
+        set({ ready: true, sessions: sortSessions(summaries), activeId })
+        if (activeId) {
+          void ensureSessionLoaded(activeId)
+        } else if (stored) {
+          writeActiveSessionId(null)
+        }
       }
     } catch (error) {
       if (epoch === historyEpoch) {

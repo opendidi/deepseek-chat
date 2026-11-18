@@ -188,7 +188,7 @@ export const zh = {
   modelBuiltinList: '使用内置模型列表',
   modelCloudList: '使用云端模型列表',
   modelUseBuiltin: '切回内置',
-  modelPriceNote: '每 1M tokens：命中 / 输入 / 输出（空闲价），高峰 ×2',
+  modelPriceNote: '每 1M tokens：命中 / 输入 / 输出，高峰 ×2',
   modelPriceUnavailable: '价格以服务端为准',
   modelFetchFailed: '获取模型列表失败，已保留内置列表',
   modelNeedApiKey: '请先在设置中填写 API Key',
