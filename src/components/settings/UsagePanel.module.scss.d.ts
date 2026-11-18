@@ -5,6 +5,7 @@ declare const styles: {
   readonly bar: string
   readonly barColumn: string
   readonly bars: string
+  readonly barsCompact: string
   readonly billingBox: string
   readonly contextGrid: string
   readonly contextItem: string
@@ -17,10 +18,16 @@ declare const styles: {
   readonly heatCell: string
   readonly heatmap: string
   readonly hint: string
+  readonly inlineError: string
   readonly kpi: string
   readonly kpiGrid: string
   readonly kpiLabel: string
+  readonly kpiPrimary: string
   readonly kpiValue: string
+  readonly level0: string
+  readonly level1: string
+  readonly level2: string
+  readonly level3: string
   readonly linkButton: string
   readonly panel: string
   readonly priceRow: string

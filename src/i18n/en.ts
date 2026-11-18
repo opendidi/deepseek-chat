@@ -98,6 +98,7 @@ export const en = {
   usageExportCsv: 'Export CSV',
   usageClearLedger: 'Clear ledger',
   usageLoading: 'Loading usage…',
+  usageRefreshing: 'Updating…',
   usageFailed: 'Failed to load usage. Please retry.',
   usageRetry: 'Retry',
   usageEstimated: 'Estimated',

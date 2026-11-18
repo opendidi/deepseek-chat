@@ -42,9 +42,15 @@ const download = (filename: string, content: string, type: string) => {
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = filename
+  anchor.style.display = 'none'
+  document.body.append(anchor)
   anchor.click()
+  anchor.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
+
+/** 热力图按活动强度分四级，避免连续透明度让空白格子也显得像有数据 */
+const HEAT_LEVELS = [styles.level0, styles.level1, styles.level2, styles.level3]
 
 /** 设置 → 统计：按时间范围聚合本地会话与本机账本，费用为按官方单价的估算值 */
 export const UsagePanel = () => {
@@ -54,21 +60,25 @@ export const UsagePanel = () => {
   const [metric, setMetric] = useState<Metric>('tokens')
   const [data, setData] = useState<DetailedUsage | null>(null)
   const [failed, setFailed] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    setData(null)
     setFailed(false)
+    setRefreshing(true)
+    // 切换范围时保留上一份数据，避免整页闪回加载态
     void collectDetailedUsage(range, freeServerTools)
       .then((result) => {
         if (!cancelled) {
           setData(result)
+          setRefreshing(false)
         }
       })
       .catch(() => {
         if (!cancelled) {
           setFailed(true)
+          setRefreshing(false)
         }
       })
     return () => {
@@ -113,7 +123,7 @@ export const UsagePanel = () => {
       ['tts_chars', totals?.ttsChars ?? 0].join(','),
       ['asr_seconds', totals?.asrSeconds ?? 0].join(','),
     ]
-    download(`usage-${data.range}.csv`, rows.join('\n'), 'text/csv;charset=utf-8')
+    download(`usage-${data.range}.csv`, `\ufeff${rows.join('\n')}`, 'text/csv;charset=utf-8')
   }
 
   const kpis: { label: string; value: string }[] = [
@@ -136,7 +146,9 @@ export const UsagePanel = () => {
     <div className={styles.panel}>
       <div className={styles.header}>
         <h3 className={styles.title}>{t('usagePanelTitle')}</h3>
-        <span className={styles.estimated}>{t('usageEstimated')}</span>
+        <span className={styles.estimated}>
+          {refreshing ? t('usageRefreshing') : t('usageEstimated')}
+        </span>
         <div className={styles.segments}>
           {RANGES.map((item) => (
             <button
@@ -151,7 +163,7 @@ export const UsagePanel = () => {
         </div>
       </div>
 
-      {failed ? (
+      {failed && !data ? (
         <div className={styles.empty}>
           {t('usageFailed')}
           <button type="button" className={styles.linkButton} onClick={() => setReload((n) => n + 1)}>
@@ -162,9 +174,10 @@ export const UsagePanel = () => {
         <div className={styles.empty}>{t('usageLoading')}</div>
       ) : (
         <>
+          {failed ? <div className={styles.inlineError}>{t('usageFailed')}</div> : null}
           <div className={styles.kpiGrid}>
-            {kpis.map((item) => (
-              <div key={item.label} className={styles.kpi}>
+            {kpis.map((item, index) => (
+              <div key={item.label} className={clsx(styles.kpi, index === 0 && styles.kpiPrimary)}>
                 <span className={styles.kpiLabel}>{item.label}</span>
                 <span className={styles.kpiValue}>{item.value}</span>
               </div>
@@ -187,7 +200,7 @@ export const UsagePanel = () => {
                 ))}
               </div>
             </div>
-            <div className={styles.bars}>
+            <div className={clsx(styles.bars, data.daily.length > 7 && styles.barsCompact)}>
               {data.daily.map((day) => {
                 const value = metricValue(day, metric)
                 return (
@@ -211,11 +224,12 @@ export const UsagePanel = () => {
                 <div className={styles.heatmap}>
                   {data.daily.map((day) => {
                     const value = metricValue(day, metric)
+                    const ratio = value / maxDaily
+                    const level = value === 0 ? 0 : ratio > 0.6 ? 3 : ratio > 0.25 ? 2 : 1
                     return (
                       <span
                         key={day.date}
-                        className={styles.heatCell}
-                        style={{ opacity: value === 0 ? 0.25 : 0.35 + 0.65 * (value / maxDaily) }}
+                        className={clsx(styles.heatCell, HEAT_LEVELS[level])}
                         title={`${day.date}: ${value}`}
                       />
                     )

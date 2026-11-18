@@ -94,6 +94,7 @@ export const zh = {
   usageExportCsv: '导出 CSV',
   usageClearLedger: '清空用量账本',
   usageLoading: '统计加载中…',
+  usageRefreshing: '更新中…',
   usageFailed: '统计读取失败，请重试',
   usageRetry: '重试',
   usageEstimated: '估算',
