@@ -34,7 +34,7 @@ The output is written to `dist/`. Assets use relative paths, so you can point a 
 ### Conversations
 
 - Multiple conversations with automatic titles, renaming, pinning, and deletion; sidebar search across titles and message contents (Ctrl/Cmd+K), and an in-chat outline for jumping to questions.
-- Edit prompts, regenerate replies, switch message branches, stop generation, and continue eligible replies; bookmark answers across chats.
+- Edit prompts (or press ↑ in an empty input box to edit the previous question), regenerate replies, switch message branches, stop generation (Esc or the stop button), and continue eligible replies; bookmark answers across chats.
 - The active conversation id lives in the URL hash (`#s=<id>`), so reloading, copying the link, or sharing it keeps you in the same chat.
 - Right-click selected text in a reply to **Quote / Copy**. Quotes appear above the input (removable, up to 6), are sent to the model together with the next message, and are displayed separately from the question bubble. Long-press selection works on touch devices too.
 - Long chats render the latest 60 messages by default; a top button loads earlier ones.
@@ -56,8 +56,8 @@ The output is written to `dist/`. Assets use relative paths, so you can point a 
 - Upload, paste, or drag and drop attachments; voice input and read-aloud replies; a live audio spectrum while recording on mobile.
 - Custom instructions (persona), a prompt library with slash commands (type `/`), and input history (↑/↓ in an empty input box).
 - Markdown, syntax highlighting, KaTeX math, Mermaid diagrams, source citations, and a click-to-zoom image viewer.
-- Simplified Chinese and English, light and dark themes, font size, mobile layouts, location settings, PWA install, and usage statistics.
-- Global shortcuts: Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, Ctrl/Cmd+, settings.
+- Simplified Chinese and English, light and dark themes, font size, mobile layouts, location settings, PWA install (in-app install entry and update notice), offline notice, and usage statistics.
+- Global shortcuts: Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, Ctrl/Cmd+, settings; Esc stops an in-flight reply.
 
 ### Data migration
 

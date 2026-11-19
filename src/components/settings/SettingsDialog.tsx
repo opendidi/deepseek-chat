@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { errorStatus, SettingCell, SettingSwitch, type Status } from './settingsShared.js'
-import { lazy, Suspense, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   IconChartOutline16,
   IconDarkOutline16,
@@ -21,7 +21,7 @@ import {
 } from '../../services/chat/backup.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
-import { regionCodes, getRegionName, provinces } from '../../services/location.js'
+import { regionCodes, getRegionName, loadProvinces, type ProvinceOption } from '../../services/location.js'
 import {
   isChineseBrowser,
   setApiOrigin,
@@ -54,13 +54,14 @@ import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import { openPromptLibrary } from '../chatInput/promptLibraryState.js'
 import { UsageStatsCell } from './UsageStats.js'
+import { modelDisplayName } from '../../services/models.js'
+import { downloadBlob } from '../../utils/download.js'
+import styles from './Settings.module.scss'
 
 /** 统计分区按需加载：聚合逻辑与图表不进入首屏主包 */
 const UsagePanel = lazy(() =>
   import('./UsagePanel.js').then((module) => ({ default: module.UsagePanel }))
 )
-import { modelDisplayName } from '../../services/models.js'
-import styles from './Settings.module.scss'
 
 /**
  * 设置弹窗：分「通用设置」（主题、语言、朗读音色、位置）与「数据管理」（API Key、导入、导出、删除）。
@@ -269,9 +270,22 @@ const LocationSetting = () => {
   const t = useTranslate()
   const locale = useSettings((state) => state.locale)
   const location = useSettings((state) => state.location)
+  // 省市大表随设置弹窗懒加载；加载完成前省份下拉为空
+  const [provinceOptions, setProvinceOptions] = useState<ProvinceOption[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void loadProvinces().then((options) => {
+      if (!cancelled) {
+        setProvinceOptions(options)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const province =
     location?.region === 'CN'
-      ? provinces.find((item) => item.code === location.province)
+      ? provinceOptions.find((item) => item.code === location.province)
       : undefined
 
   return (
@@ -288,7 +302,7 @@ const LocationSetting = () => {
                 className={styles.provinceSelect}
                 value={province?.code ?? ''}
                 placeholder={t('settingsLocationProvince')}
-                options={provinces.map((item) => ({ value: item.code, label: item.name }))}
+                options={provinceOptions.map((item) => ({ value: item.code, label: item.name }))}
                 onChange={(value) => {
                   if (value !== province?.code) {
                     setLocation({ region: 'CN', province: value })
@@ -434,39 +448,62 @@ const SystemPromptSetting = () => {
   )
 }
 
-/** Top P：与温度一样留空使用服务端默认值，范围 0.01–1 */
-const TopPSetting = () => {
+/** 数字设置项的公共实现：留空恢复服务端默认（null），非法输入报错；
+ * clamp 模式把区间外的值收敛到 [min, max]（温度 / Top P），非 clamp 模式下小于 min 报错（最大输出） */
+const NumberField = ({
+  labelKey,
+  descKey,
+  value,
+  setValue,
+  min,
+  max,
+  clamp = false,
+  integer = false,
+}: {
+  labelKey: TranslationKey
+  descKey: TranslationKey
+  value: number | null
+  setValue: (value: number | null) => void
+  min: number
+  max: number
+  clamp?: boolean
+  integer?: boolean
+}) => {
   const t = useTranslate()
-  const topP = useSettings((state) => state.topP)
-  const [text, setText] = useState(() => (topP === null ? '' : String(topP)))
+  const [text, setText] = useState(() => (value === null ? '' : String(value)))
   const [error, setError] = useState(false)
   const commit = () => {
     const trimmed = text.trim()
     if (!trimmed) {
-      setTopP(null)
+      setValue(null)
       setError(false)
       return
     }
-    const value = Number(trimmed)
-    if (!Number.isFinite(value)) {
+    const parsed = Number(trimmed)
+    if (!Number.isFinite(parsed) || (!clamp && parsed < min)) {
       setError(true)
       return
     }
-    const clamped = Math.min(1, Math.max(0.01, value))
-    setTopP(clamped)
-    setText(String(clamped))
+    // 范围外的值不弹错，直接收敛到合法区间
+    const next = integer
+      ? Math.floor(parsed)
+      : clamp
+        ? Math.min(max, Math.max(min, parsed))
+        : parsed
+    setValue(next)
+    setText(String(next))
     setError(false)
   }
   return (
     <SettingCell
-      label={t('settingsTopP')}
-      description={t('settingsTopPDesc')}
+      label={t(labelKey)}
+      description={t(descKey)}
       status={error ? { key: 'settingsInvalidNumber', error: true } : null}
       action={
         <input
           className={styles.numberInput}
-          aria-label={t('settingsTopP')}
-          inputMode="decimal"
+          aria-label={t(labelKey)}
+          inputMode={integer ? 'numeric' : 'decimal'}
           placeholder={t('settingsDefaultPlaceholder')}
           value={text}
           onChange={(event) => {
@@ -481,6 +518,22 @@ const TopPSetting = () => {
           }}
         />
       }
+    />
+  )
+}
+
+/** Top P：与温度一样留空使用服务端默认值，范围 0.01–1 */
+const TopPSetting = () => {
+  const topP = useSettings((state) => state.topP)
+  return (
+    <NumberField
+      labelKey="settingsTopP"
+      descKey="settingsTopPDesc"
+      value={topP}
+      setValue={setTopP}
+      min={0.01}
+      max={1}
+      clamp
     />
   )
 }
@@ -544,101 +597,31 @@ const ModelSwitches = () => {
 }
 
 const TemperatureSetting = () => {
-  const t = useTranslate()
   const temperature = useSettings((state) => state.temperature)
-  const [text, setText] = useState(() => (temperature === null ? '' : String(temperature)))
-  const [error, setError] = useState(false)
-  const commit = () => {
-    const trimmed = text.trim()
-    if (!trimmed) {
-      setTemperature(null)
-      setError(false)
-      return
-    }
-    const value = Number(trimmed)
-    if (!Number.isFinite(value)) {
-      setError(true)
-      return
-    }
-    // 范围外的值不弹错，直接收敛到合法区间
-    const clamped = Math.min(2, Math.max(0, value))
-    setTemperature(clamped)
-    setText(String(clamped))
-    setError(false)
-  }
   return (
-    <SettingCell
-      label={t('settingsTemperature')}
-      description={t('settingsTemperatureDesc')}
-      status={error ? { key: 'settingsInvalidNumber', error: true } : null}
-      action={
-        <input
-          className={styles.numberInput}
-          aria-label={t('settingsTemperature')}
-          inputMode="decimal"
-          placeholder={t('settingsDefaultPlaceholder')}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value)
-            setError(false)
-          }}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commit()
-            }
-          }}
-        />
-      }
+    <NumberField
+      labelKey="settingsTemperature"
+      descKey="settingsTemperatureDesc"
+      value={temperature}
+      setValue={setTemperature}
+      min={0}
+      max={2}
+      clamp
     />
   )
 }
 
 const MaxTokensSetting = () => {
-  const t = useTranslate()
   const maxTokens = useSettings((state) => state.maxTokens)
-  const [text, setText] = useState(() => (maxTokens === null ? '' : String(maxTokens)))
-  const [error, setError] = useState(false)
-  const commit = () => {
-    const trimmed = text.trim()
-    if (!trimmed) {
-      setMaxTokens(null)
-      setError(false)
-      return
-    }
-    const value = Number(trimmed)
-    if (!Number.isFinite(value) || value < 1) {
-      setError(true)
-      return
-    }
-    setMaxTokens(Math.floor(value))
-    setText(String(Math.floor(value)))
-    setError(false)
-  }
   return (
-    <SettingCell
-      label={t('settingsMaxTokens')}
-      description={t('settingsMaxTokensDesc')}
-      status={error ? { key: 'settingsInvalidNumber', error: true } : null}
-      action={
-        <input
-          className={styles.numberInput}
-          aria-label={t('settingsMaxTokens')}
-          inputMode="numeric"
-          placeholder={t('settingsDefaultPlaceholder')}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value)
-            setError(false)
-          }}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commit()
-            }
-          }}
-        />
-      }
+    <NumberField
+      labelKey="settingsMaxTokens"
+      descKey="settingsMaxTokensDesc"
+      value={maxTokens}
+      setValue={setMaxTokens}
+      min={1}
+      max={Number.POSITIVE_INFINITY}
+      integer
     />
   )
 }
@@ -806,9 +789,6 @@ const ThemeSetting = () => {
   )
 }
 
-/** `reason` 为失败原因的文案 key，展示时按当前语言翻译后填入 `message` 参数。 */
-
-/** 导出失败附带原因：预期的错误用对应文案作原因，其他错误用错误信息。 */
 /** 关闭后 API Key 只在内存中，刷新页面即需重新输入。 */
 const RememberApiKeySetting = () => {
   const t = useTranslate()
@@ -952,21 +932,16 @@ const ImportHistory = ({
   )
 }
 
-/** 将全部会话及图片导出为 ZIP 文件并下载 */
-const ExportHistory = ({ disabled }: { disabled: boolean }) => {
-  const t = useTranslate()
-  const empty = useChatStore((state) => state.sessions.length === 0)
+/** 导出任务的公共状态：busy、结果文案与弹窗关闭后的存活检查，两个导出入口共用 */
+const useExportTask = () => {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<Status>(null)
   const alive = useAlive()
-
-  const onExport = async () => {
+  const run = async (task: (signal: { alive: () => boolean }) => Promise<void>) => {
     setBusy(true)
     setStatus(null)
     try {
-      const { name, blob } = await exportHistory()
-      // 下载是用户发起的副作用，即使弹窗已关闭也应完成
-      downloadBlob(name, blob)
+      await task({ alive: () => alive.current })
     } catch (error) {
       if (alive.current) {
         setStatus(errorStatus('historyExportFailed', error))
@@ -977,6 +952,21 @@ const ExportHistory = ({ disabled }: { disabled: boolean }) => {
       }
     }
   }
+  return { busy, status, setStatus, run }
+}
+
+/** 将全部会话及图片导出为 ZIP 文件并下载 */
+const ExportHistory = ({ disabled }: { disabled: boolean }) => {
+  const t = useTranslate()
+  const empty = useChatStore((state) => state.sessions.length === 0)
+  const { busy, status, run } = useExportTask()
+
+  const onExport = () =>
+    run(async () => {
+      const { name, blob } = await exportHistory()
+      // 下载是用户发起的副作用，即使弹窗已关闭也应完成
+      downloadBlob(name, blob)
+    })
 
   return (
     <SettingCell
@@ -999,49 +989,26 @@ const ExportHistory = ({ disabled }: { disabled: boolean }) => {
   )
 }
 
-/** 触发浏览器下载 */
-const downloadBlob = (name: string, blob: Blob) => {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
-}
-
 /** 加密导出：设置密码（可留空，留空即普通 ZIP）后下载 */
 const ExportEncrypted = ({ disabled }: { disabled: boolean }) => {
   const t = useTranslate()
   const empty = useChatStore((state) => state.sessions.length === 0)
   const [password, setPassword] = useState('')
   const [confirmText, setConfirmText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<Status>(null)
-  const alive = useAlive()
+  const { busy, status, setStatus, run } = useExportTask()
 
   const mismatch = confirmText !== '' && password !== confirmText
   const ready = password === '' || (confirmText !== '' && password === confirmText)
 
-  const onExport = async () => {
-    setBusy(true)
-    setStatus(null)
-    try {
+  const onExport = () =>
+    run(async ({ alive }) => {
       const { name, blob } = await exportHistory({ password: password || undefined })
       // 下载是用户发起的副作用，即使弹窗已关闭也应完成
       downloadBlob(name, blob)
-      if (alive.current) {
+      if (alive()) {
         setStatus({ key: 'exportEncryptedDone' })
       }
-    } catch (error) {
-      if (alive.current) {
-        setStatus(errorStatus('historyExportFailed', error))
-      }
-    } finally {
-      if (alive.current) {
-        setBusy(false)
-      }
-    }
-  }
+    })
 
   return (
     <div className={styles.cell}>

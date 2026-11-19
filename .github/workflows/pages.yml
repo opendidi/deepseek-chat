@@ -40,6 +40,9 @@ jobs:
       - name: Check types
         run: pnpm type
 
+      - name: Check SCSS type declarations
+        run: pnpm scss:types:check
+
       - name: Lint
         run: pnpm lint
 

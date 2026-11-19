@@ -195,12 +195,13 @@ const SearchRow = ({
   isLast: boolean
 }) => {
   const t = useTranslate()
-  const entry = useSearchPanel((state) => state.entry)
   const wip = step.status === 'wip'
   const tick = useTicker(wip && step.queries.length > 1, 2000)
   const count = step.results.length
   const clickable = !wip && count > 0
   const panelEntry = `${message.id}-search-${step.key}`
+  // 相等性下沉进 selector：面板开关只重渲染命中的那一行，而不是所有工具行
+  const active = useSearchPanel((state) => state.entry === panelEntry)
   const failed = step.status === 'failed'
   const interrupted = failed && !streaming && message.status === 'stopped'
 
@@ -249,7 +250,7 @@ const SearchRow = ({
         styles.row,
         !isLast && styles.withLine,
         clickable && styles.clickable,
-        entry === panelEntry && styles.active
+        active && styles.active
       )}
       onClick={clickable ? () => toggleSearchPanel(panelEntry, step.results) : undefined}
     >

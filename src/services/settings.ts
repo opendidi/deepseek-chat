@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import type { ChatModel } from './api/types.js'
 import type { TtsVoice } from './api/speech.js'
 import { isSafeModelId } from '../utils/modelId.js'
-import { normalizeLocation, type UserLocation } from './location.js'
+import { normalizeLocation, parseLocationShape, type UserLocation } from './location.js'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -115,9 +115,13 @@ const initialLocale = (): Locale => {
   return isChineseBrowser() ? 'zh-CN' : 'en-US'
 }
 
+/**
+ * 初始位置走同步的结构校验（省市大表是懒加载的），保存过的值写入前已完整校验过；
+ * 随后由下方 useSettings 创建后的异步复核兜底，清掉手改 localStorage 之类的坏数据。
+ */
 const initialLocation = (): UserLocation | null => {
   try {
-    const location = normalizeLocation(JSON.parse(read(KEYS.location) ?? 'null'))
+    const location = parseLocationShape(JSON.parse(read(KEYS.location) ?? 'null'))
     if (!location) {
       return null
     }
@@ -203,11 +207,13 @@ if (!rememberApiKeyAtStart) {
   write(KEYS.apiKey, null)
 }
 
+const savedLocation = initialLocation()
+
 export const useSettings = create<Settings>(() => ({
   apiKey: rememberApiKeyAtStart ? read(KEYS.apiKey) : null,
   rememberApiKey: rememberApiKeyAtStart,
   locale: initialLocale(),
-  location: initialLocation(),
+  location: savedLocation,
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
   thinking: read(KEYS.thinking) === 'true',
@@ -234,10 +240,21 @@ export const setLocale = (locale: Locale) => {
   useSettings.setState({ locale })
 }
 
+// 省市大表加载后复核初始位置：结构校验放过的坏数据（如手改的 localStorage）在这里清掉
+if (savedLocation?.province !== undefined) {
+  void normalizeLocation(savedLocation).then((location) => {
+    if (!location && useSettings.getState().location === savedLocation) {
+      useSettings.setState({ location: null })
+    }
+  })
+}
+
 export const setLocation = (value: UserLocation | null) => {
-  const location = normalizeLocation(value)
-  write(KEYS.location, location ? JSON.stringify(location) : null)
-  useSettings.setState({ location })
+  // 完整校验要查省市大表（异步）；来源是设置里已加载的选项列表，正常必然通过
+  void normalizeLocation(value).then((location) => {
+    write(KEYS.location, location ? JSON.stringify(location) : null)
+    useSettings.setState({ location })
+  })
 }
 
 export const setThemePreference = (themePreference: ThemePreference) => {

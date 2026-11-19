@@ -63,9 +63,10 @@ export const MermaidDiagram = memo(function MermaidDiagram({
           }
         }
       }
-      // 当前帧结束后绘制最新片段，连续输入合并为一次绘制。
+      // 当前帧结束后绘制最新片段；流式期间 1s 一档重画（单次 renderMermaid 是 d3 全量渲染，
+      // 100ms 节奏会在长图流式时持续占满主线程），结束后立即绘制完整内容。
       if (!cancelled && loading) {
-        timer = setTimeout(renderLatest, 100)
+        timer = setTimeout(renderLatest, 1000)
       }
     }
 

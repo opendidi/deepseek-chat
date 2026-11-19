@@ -1,5 +1,8 @@
 .message {
   position: relative;
+  // 屏外历史消息跳过渲染与布局，长会话滚动更省；auto 会在首次渲染后记住实际高度，减少占位误差
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
 
   &:hover .actions,
   &:focus-within .actions {

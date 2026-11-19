@@ -87,7 +87,10 @@ export const AssistantMessage = memo(function AssistantMessage({
   const t = useTranslate()
   const allowRefusal = useSettings((state) => state.continueAfterRefusal)
   const view = useReplyView(message, streaming)
-  const panelEntry = useSearchPanel((state) => state.entry)
+  const summaryEntry = `${message.id}-summary`
+  // 相等性下沉进 selector：只在本条的汇总入口命中时才重渲染，
+  // 避免开关搜索面板（entry 变化）牵动所有已挂载消息的 store 订阅。
+  const summaryActive = useSearchPanel((state) => state.entry === summaryEntry)
   const notice = streaming ? null : describeReply(message)
   // 安全拒绝：已下发的思考与正文按协议丢弃，只显示模板答复。
   const refused = message.stopReason === 'refusal'
@@ -97,7 +100,6 @@ export const AssistantMessage = memo(function AssistantMessage({
     .join('\n\n')
   const copyText = responseText || notice?.text
   const waiting = streaming && view.steps.length === 0 && !view.answer && !message.thinking
-  const summaryEntry = `${message.id}-summary`
   return (
     <div className={styles.message} data-message-id={message.id}>
       {refused ? null : (
@@ -169,7 +171,7 @@ export const AssistantMessage = memo(function AssistantMessage({
       ) : null}
       {!streaming && !refused && view.searchResults.length > 0 ? (
         <div
-          className={clsx(styles.summary, panelEntry === summaryEntry && styles.summaryActive)}
+          className={clsx(styles.summary, summaryActive && styles.summaryActive)}
           onClick={() => toggleSearchPanel(summaryEntry, view.searchResults)}
         >
           <SiteThumbnails sources={view.searchResults} />

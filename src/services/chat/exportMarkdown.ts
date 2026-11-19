@@ -1,4 +1,6 @@
 import { translate } from '../../i18n/index.js'
+import { useSettings } from '../settings.js'
+import { downloadBlob } from '../../utils/download.js'
 import { formatDate } from '../../utils/format.js'
 import { getVisibleMessages } from './branches.js'
 import { useChatStore } from './store.js'
@@ -49,7 +51,7 @@ const replyToMarkdown = (
         (citation, index) => `${index + 1}. [${citation.title || citation.url}](${citation.url})`
       )
       .join('\n')
-    parts.push(`**${translate('exportMarkdownSources')}：**\n\n${sourceList}`)
+    parts.push(`${translate('exportMarkdownSourcesHeading')}\n\n${sourceList}`)
   }
   return { text: parts.join('\n\n'), citations }
 }
@@ -60,17 +62,18 @@ export const sessionToMarkdown = (session: Session): string => {
   const lines: string[] = [
     `# ${session.title || translate('untitledChat')}`,
     '',
-    `> ${translate('exportMarkdownDate')}：${formatDate(now)}`,
+    translate('exportMarkdownDateLine', { date: formatDate(now) ?? '' }),
     '',
   ]
   for (const message of getVisibleMessages(session)) {
     if (message.role === 'user') {
       lines.push(`## ${translate('exportMarkdownUser')}`, '', message.content, '')
       if (message.files.length > 0) {
-        lines.push(
-          `${translate('exportMarkdownAttachments')}：${message.files.map((file) => file.name).join('、')}`,
-          ''
-        )
+        // 列表分隔符按当前语言取「、」或「, 」，与 UI 文案保持同语言
+        const names = new Intl.ListFormat(useSettings.getState().locale, {
+          type: 'unit',
+        }).format(message.files.map((file) => file.name))
+        lines.push(translate('exportMarkdownAttachmentsLine', { list: names }), '')
       }
     } else {
       const { text } = replyToMarkdown(message)
@@ -78,20 +81,6 @@ export const sessionToMarkdown = (session: Session): string => {
     }
   }
   return lines.join('\n')
-}
-
-/** 触发浏览器下载 */
-const download = (name: string, blob: Blob) => {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = name
-  anchor.rel = 'noopener'
-  anchor.style.display = 'none'
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
 /** 导出指定会话为 Markdown：优先内存中的最新内容，未打开的会话从本地存储读取 */
@@ -106,6 +95,6 @@ export const exportSessionMarkdown = async (sessionId: string): Promise<boolean>
   // 未打开的会话导出期间可能刚被重命名，标题以列表为准
   const session = summary ? { ...stored, title: summary.title } : stored
   const blob = new Blob([sessionToMarkdown(session)], { type: 'text/markdown;charset=utf-8' })
-  download(safeFileName(session.title), blob)
+  downloadBlob(safeFileName(session.title), blob)
   return true
 }

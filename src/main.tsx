@@ -5,7 +5,14 @@ import { ensureKatex } from './services/markdown/katex.js'
 import './app/theme.scss'
 import './app/global.scss'
 
-ensureKatex()
+// KaTeX 约 300 KiB（gzip 约 90 KiB），懒加载机制已在 MathFormula 内置；
+// 这里只在主线程空闲时预载，避免首屏冷加载就拉公式引擎，页面没有公式时也不影响功能。
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(() => ensureKatex())
+} else {
+  setTimeout(() => ensureKatex(), 1500)
+}
+
 setupTheme()
 
 createRoot(document.getElementById('root') as HTMLElement).render(<App />)

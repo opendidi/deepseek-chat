@@ -1,15 +1,16 @@
+/** 由 scripts/generate-scss-types.mjs 生成；样式类名变化后重新运行 pnpm scss:types */
 declare const styles: {
-  readonly message: string
   readonly actions: string
-  readonly waiting: string
-  readonly waitingDot: string
-  readonly fading: string
+  readonly alwaysShow: string
+  readonly bottom: string
+  readonly continueButton: string
+  readonly message: string
   readonly notice: string
   readonly noticeAction: string
-  readonly bottom: string
-  readonly alwaysShow: string
-  readonly continueButton: string
   readonly summary: string
   readonly summaryActive: string
+  readonly usage: string
+  readonly waiting: string
+  readonly waitingDot: string
 }
 export = styles

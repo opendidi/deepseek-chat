@@ -1,3 +1,4 @@
+import { translate } from '../../i18n/index.js'
 import type { ClientToolParam } from '../api/types.js'
 
 /**
@@ -19,10 +20,11 @@ const MAX_EXPRESSION_LENGTH = 200
 const truncate = (value: string): string =>
   value.length > MAX_RESULT_LENGTH ? `${value.slice(0, MAX_RESULT_LENGTH)}…` : value
 
-/** 只支持数字、四则运算、幂与括号的递归下降求值；不使用 eval，不接受变量或函数 */
+/** 只支持数字、四则运算、幂与括号的递归下降求值；不使用 eval，不接受变量或函数。
+ * 错误文案走 i18n：消息会显示在 ToolSteps 并回传给模型，语言随当前界面 */
 export const evaluateExpression = (expression: string): number => {
   if (!expression.trim() || expression.length > MAX_EXPRESSION_LENGTH) {
-    throw new Error('表达式为空或过长')
+    throw new Error(translate('agentToolErrorEmpty'))
   }
   const tokens: string[] = []
   for (let i = 0; i < expression.length; ) {
@@ -38,7 +40,7 @@ export const evaluateExpression = (expression: string): number => {
       }
       const number = expression.slice(i, end)
       if (!/^\d+(\.\d+)?$/.test(number)) {
-        throw new Error(`非法数字 ${number}`)
+        throw new Error(translate('agentToolErrorBadNumber', { value: number }))
       }
       tokens.push(number)
       i = end
@@ -49,7 +51,7 @@ export const evaluateExpression = (expression: string): number => {
       i += 1
       continue
     }
-    throw new Error(`非法字符 ${char}`)
+    throw new Error(translate('agentToolErrorBadChar', { value: char }))
   }
 
   let position = 0
@@ -60,12 +62,12 @@ export const evaluateExpression = (expression: string): number => {
     if (token === '(') {
       const value = parseExpr()
       if (take() !== ')') {
-        throw new Error('缺少右括号')
+        throw new Error(translate('agentToolErrorMissingParen'))
       }
       return value
     }
     if (token === undefined || !/^\d/.test(token)) {
-      throw new Error('缺少操作数')
+      throw new Error(translate('agentToolErrorMissingOperand'))
     }
     return Number(token)
   }
@@ -80,7 +82,7 @@ export const evaluateExpression = (expression: string): number => {
       const operator = take()
       const right = parsePower()
       if (operator === '/' && right === 0) {
-        throw new Error('除数为零')
+        throw new Error(translate('agentToolErrorDivideByZero'))
       }
       value = operator === '*' ? value * right : value / right
     }
@@ -98,10 +100,10 @@ export const evaluateExpression = (expression: string): number => {
 
   const result = parseExpr()
   if (position !== tokens.length) {
-    throw new Error('表达式末尾有多余内容')
+    throw new Error(translate('agentToolErrorTrailing'))
   }
   if (!Number.isFinite(result)) {
-    throw new Error('结果不是有限数')
+    throw new Error(translate('agentToolErrorNotFinite'))
   }
   return result
 }
@@ -130,7 +132,7 @@ export const CLIENT_TOOLS: readonly ClientTool[] = [
     },
     run: async (input) => {
       if (typeof input.expression !== 'string') {
-        throw new Error('缺少 expression 参数')
+        throw new Error(translate('agentToolErrorMissingParam', { name: 'expression' }))
       }
       return String(evaluateExpression(input.expression))
     },
@@ -170,11 +172,11 @@ export const runClientTool = async (
 ): Promise<ClientToolResult> => {
   const tool = CLIENT_TOOLS.find((item) => item.name === name)
   if (!tool) {
-    return { content: `未知工具：${name}`, isError: true }
+    return { content: translate('agentToolUnknown', { name }), isError: true }
   }
   try {
     if (signal?.aborted) {
-      throw new Error('已取消')
+      throw new Error(translate('agentToolCancelled'))
     }
     return { content: truncate(await tool.run(input, signal)), isError: false }
   } catch (error) {

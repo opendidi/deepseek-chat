@@ -11,6 +11,12 @@
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
 
+  // 会话项可键盘聚焦，给出与悬停一致的可见焦点样式
+  &:focus-visible {
+    outline: none;
+    background-color: var(--dsw-specific-sidebar-nav-item-hover);
+  }
+
   &.active {
     background-color: var(--dsw-specific-sidebar-nav-item-active-accent);
     color: var(--dsw-alias-brand-primary-invert);

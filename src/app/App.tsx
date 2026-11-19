@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { useTranslate } from '../i18n/index.js'
 import { setSiderCollapsed, useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
@@ -18,7 +18,13 @@ import { SessionView } from '../components/session/SessionView.js'
 import { MobileHeader } from '../components/session/MobileHeader.js'
 import { Welcome } from '../components/session/Welcome.js'
 import { ensureApiKey, openSettings } from '../components/settings/settingsDialogState.js'
-import { SettingsDialog } from '../components/settings/SettingsDialog.js'
+
+// 设置弹窗整块懒加载：主包只保留打开状态（settingsDialogState），首次打开设置时才拉取代码
+const SettingsDialog = lazy(() =>
+  import('../components/settings/SettingsDialog.js').then((module) => ({
+    default: module.SettingsDialog,
+  }))
+)
 import { Lightbox } from '../components/base/Lightbox.js'
 import { Toast } from '../components/base/Toast.js'
 import { SelectionMenu } from '../components/messages/SelectionMenu.js'
@@ -31,11 +37,15 @@ import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider, openMobileSider } from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { requestSiderSearchFocus } from '../components/sider/siderSearchState.js'
+import { bindPwa } from './pwa.js'
+import { InstallPrompt } from './InstallPrompt.js'
+import { useOnline } from './useOnline.js'
 import styles from './App.module.scss'
 
 export const App = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
+  const online = useOnline()
   const locale = useSettings((state) => state.locale)
   const fontSize = useSettings((state) => state.fontSize)
   // 移动端侧边栏以独立抽屉管理开合状态
@@ -120,6 +130,8 @@ export const App = () => {
     void initFavorites()
     // 首次打开先在设置里输入 API Key
     ensureApiKey()
+    // 安装入口与新版本提示（仅生产构建注册 SW 的环境有意义）
+    bindPwa()
   }, [])
 
   return (
@@ -127,6 +139,11 @@ export const App = () => {
       <div ref={frameRef} className={styles.frame}>
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
         <main className={styles.main}>
+          {!online ? (
+            <div className={styles.saveError} role="status">
+              <span>{t('offlineNotice')}</span>
+            </div>
+          ) : null}
           {saveError ? (
             <div className={styles.saveError} role="alert">
               <span>{t('sessionSaveFailed')}</span>
@@ -183,10 +200,13 @@ export const App = () => {
         </main>
         <SearchPanel />
       </div>
-      <SettingsDialog />
+      <Suspense fallback={null}>
+        <SettingsDialog />
+      </Suspense>
       <Lightbox />
       <PromptLibrary />
       <SelectionMenu />
+      <InstallPrompt />
       <Toast />
     </>
   )

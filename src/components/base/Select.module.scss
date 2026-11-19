@@ -97,4 +97,9 @@
   &:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
+
+  // 键盘导航的高亮项：与悬停同底色，随方向键移动
+  &.optionFocused {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }

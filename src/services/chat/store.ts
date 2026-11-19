@@ -219,7 +219,11 @@ const updateReply = (sessionId: string, reply: AssistantMessage) =>
     ),
   }))
 
-const persist = (sessionId: string) => {
+/** 落盘防抖窗口：一次发送会触发多次 persist（开始、每个附件的 serverId、结束），合并成末次之后的一次写入 */
+const PERSIST_DELAY = 300
+const persistTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+const saveSessionNow = (sessionId: string) => {
   const session = getSession(sessionId)
   if (session) {
     unsavedSessions.add(sessionId)
@@ -258,6 +262,37 @@ const persist = (sessionId: string) => {
   }
 }
 
+/** 排程防抖落盘：总是先记入未保存集合，离开页面（bindChatPersistence）时强制写入 */
+const persist = (sessionId: string) => {
+  if (!getSession(sessionId)) {
+    return
+  }
+  unsavedSessions.add(sessionId)
+  const pending = persistTimers.get(sessionId)
+  if (pending !== undefined) {
+    clearTimeout(pending)
+  }
+  persistTimers.set(
+    sessionId,
+    setTimeout(() => {
+      persistTimers.delete(sessionId)
+      saveSessionNow(sessionId)
+    }, PERSIST_DELAY)
+  )
+}
+
+/** 取消未触发的防抖并立即落盘；即使没有排程也补一次写入，兜底失败的旧账 */
+const flushPersist = (sessionId: string) => {
+  const pending = persistTimers.get(sessionId)
+  if (pending !== undefined) {
+    clearTimeout(pending)
+    persistTimers.delete(sessionId)
+  }
+  if (unsavedSessions.has(sessionId)) {
+    saveSessionNow(sessionId)
+  }
+}
+
 export const retrySaveSessions = () => {
   if (!get().importingHistory) {
     unsavedSessions.forEach(persist)
@@ -270,14 +305,12 @@ export const bindChatPersistence = () => {
     if (get().importingHistory) {
       return
     }
-    for (const [id, flush] of streamFlushes) {
+    for (const flush of streamFlushes.values()) {
       flush()
-      persist(id)
     }
+    // 防抖中的、以及此前写入失败的所有会话一并落盘
     for (const id of unsavedSessions) {
-      if (!streamFlushes.has(id)) {
-        persist(id)
-      }
+      flushPersist(id)
     }
   }
   const onVisibilityChange = () => {
@@ -925,7 +958,8 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   }
 
   const pending = new Map<string, FileAttachment>()
-  for (const [user] of getContextRounds(request.history).toReversed()) {
+  // toReversed 需要 Chrome 110+/Safari 16.4+，超出构建目标（chrome >= 105），用拷贝后 reverse 兜底
+  for (const [user] of [...getContextRounds(request.history)].reverse()) {
     for (const file of user.files) {
       if (!file.serverId && !serverIds.has(file.id) && !pending.has(file.id)) {
         pending.set(file.id, file)
@@ -1069,7 +1103,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
           ? prepared.prefix.latestReminder
-          : createLatestReminder(useSettings.getState())
+          : await createLatestReminder(useSettings.getState())
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)

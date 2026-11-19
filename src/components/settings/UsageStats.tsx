@@ -90,7 +90,7 @@ const UsageStatsModal = ({ onClose }: { onClose: () => void }) => {
                   <div
                     className={styles.usageBar}
                     style={{ height: `${Math.round((item.count / maxDaily) * 100)}%` }}
-                    title={`${item.date}：${item.count}`}
+                    title={t('usageStatsDayTooltip', { date: item.date, count: item.count })}
                   />
                   <div className={styles.usageBarLabel}>{item.date.slice(5)}</div>
                 </div>

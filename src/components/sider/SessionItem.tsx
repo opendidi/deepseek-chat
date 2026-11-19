@@ -58,9 +58,20 @@ export const SessionItem = memo(function SessionItem({
   return (
     <div
       className={clsx(styles.item, active && styles.active)}
+      role="button"
+      tabIndex={0}
+      aria-label={displayTitle}
       onClick={() => {
         selectSession(session.id)
         closeMobileSider()
+      }}
+      onKeyDown={(event) => {
+        // Enter/Space 打开会话；菜单触发器在子层有自己的按钮，这里只负责主区域
+        if (event.key === 'Enter' || (event.key === ' ' && !event.nativeEvent.isComposing)) {
+          event.preventDefault()
+          selectSession(session.id)
+          closeMobileSider()
+        }
       }}
     >
       <div className={styles.title}>{displayTitle}</div>
@@ -100,8 +111,13 @@ export const SessionItem = memo(function SessionItem({
             },
           ]}
         >
-          {({ toggle }) => (
-            <IconButton icon={<IconEllipsisOutline16 />} aria-label={t('more')} onClick={toggle} />
+          {({ toggle, ...triggerProps }) => (
+            <IconButton
+              icon={<IconEllipsisOutline16 />}
+              aria-label={t('more')}
+              onClick={toggle}
+              {...triggerProps}
+            />
           )}
         </Menu>
       </div>

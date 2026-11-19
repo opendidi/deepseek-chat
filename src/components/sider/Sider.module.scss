@@ -249,6 +249,8 @@
   position: absolute;
   inset: 0;
   z-index: 799;
+  // 与 Modal 遮罩一致的压暗，让抽屉与页面分层可感知
+  background-color: rgba(0, 0, 0, 0.36);
 }
 
 .mobile {

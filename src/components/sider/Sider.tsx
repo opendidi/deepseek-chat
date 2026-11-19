@@ -222,16 +222,29 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   )
 }
 
-/** 移动端抽屉：浮在页面上方，点空白区域关闭。 */
+/** 移动端抽屉：浮在页面上方，点空白区域或 Esc 关闭。 */
 export const MobileSider = () => {
+  const t = useTranslate()
   const open = useMobileSider((state) => state.open)
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        closeMobileSider()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
   if (!open) {
     return null
   }
   return (
     <>
       <div className={styles.drawerMask} onClick={closeMobileSider} />
-      <div className={styles.drawer}>
+      <div className={styles.drawer} role="dialog" aria-modal="true" aria-label={t('appName')}>
         <Sider mobile />
       </div>
     </>

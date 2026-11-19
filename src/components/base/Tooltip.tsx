@@ -49,6 +49,8 @@ export const Tooltip = ({
         className={styles.trigger}
         onMouseEnter={() => schedule(true, ENTER_DELAY)}
         onMouseLeave={() => schedule(false, 0)}
+        onFocus={() => schedule(true, ENTER_DELAY)}
+        onBlur={() => schedule(false, 0)}
       >
         {children}
       </span>

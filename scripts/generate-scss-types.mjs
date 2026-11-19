@@ -1,10 +1,13 @@
 /**
- * 为缺少类型声明的 *.module.scss 生成 .d.ts（不覆盖手写声明）。
- * 用法：pnpm scss:types
+ * 为 *.module.scss 同步生成 .d.ts。生成是确定性的：同一样式总产出相同声明，
+ * 因此每次都重写，类名增删改名后声明随之更新（此前「存在即跳过」会让声明悄悄过期）。
+ * 用法：pnpm scss:types            生成/更新全部声明
+ *       pnpm scss:types --check    只校验声明是否与样式一致（CI 用），不一致退出码 1
  */
 import fs from 'node:fs'
 import path from 'node:path'
 
+const checkOnly = process.argv.includes('--check')
 const srcDir = path.join(process.cwd(), 'src')
 
 const walk = (dir, acc = []) => {
@@ -34,23 +37,48 @@ const classNames = (source) => {
 }
 
 const header = '/** 由 scripts/generate-scss-types.mjs 生成；样式类名变化后重新运行 pnpm scss:types */\n'
-const created = []
-let checked = 0
-
-for (const file of walk(srcDir)) {
-  const declaration = `${file}.d.ts`
+const declarationOf = (file) => {
   const names = classNames(fs.readFileSync(file, 'utf8'))
-  if (!fs.existsSync(declaration)) {
-    const body = `${header}declare const styles: {\n${names
-      .map((name) => `  readonly ${name}: string`)
-      .join('\n')}\n}\nexport = styles\n`
-    fs.writeFileSync(declaration, body)
-    created.push(path.relative(process.cwd(), declaration))
-    continue
-  }
-  checked += 1
+  return `${header}declare const styles: {\n${names
+    .map((name) => `  readonly ${name}: string`)
+    .join('\n')}\n}\nexport = styles\n`
 }
 
-console.log(
-  JSON.stringify({ total: walk(srcDir).length, existing: checked, generated: created.length, created }, null, 2)
-)
+const written = []
+const stale = []
+const files = walk(srcDir)
+
+for (const file of files) {
+  const declaration = `${file}.d.ts`
+  const body = declarationOf(file)
+  const current = fs.existsSync(declaration) ? fs.readFileSync(declaration, 'utf8') : null
+  if (current === body) {
+    continue
+  }
+  if (checkOnly) {
+    stale.push(path.relative(process.cwd(), declaration))
+  } else {
+    fs.writeFileSync(declaration, body)
+    written.push(path.relative(process.cwd(), declaration))
+  }
+}
+
+if (checkOnly) {
+  if (stale.length > 0) {
+    console.error(
+      JSON.stringify(
+        {
+          stale,
+          hint: '样式类名与 .d.ts 不一致，运行 pnpm scss:types 更新后一并提交',
+        },
+        null,
+        2
+      )
+    )
+    process.exitCode = 1
+  } else {
+    console.log(JSON.stringify({ total: files.length, check: 'ok' }))
+  }
+} else {
+  console.log(JSON.stringify({ total: files.length, updated: written.length, written }, null, 2))
+}

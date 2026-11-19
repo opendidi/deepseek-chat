@@ -1,3 +1,7 @@
+/**
+ * 省市编码与名称大表：只服务于中国地区的位置选择，整包 13 KiB 源码。
+ * 通过 location.ts 的 loadProvinces() 动态加载，未配置位置的会话不下载这部分。
+ */
 export const provinceNames: Record<string, string> = {
   '110000': '北京市',
   '120000': '天津市',
@@ -430,23 +434,3 @@ export const cityNames: Record<string, string> = {
   '712800': '连江县',
 }
 
-export const regionCodes: string[] =
-  'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(
-    ' '
-  )
-
-/**
- * 港澳台地区选项使用固定的中英文名称。
- */
-export const regionNameOverrides: Record<'zh-CN' | 'en-US', Record<string, string>> = {
-  'zh-CN': {
-    TW: '中国台湾',
-    HK: '中国香港',
-    MO: '中国澳门',
-  },
-  'en-US': {
-    TW: 'Taiwan, China',
-    HK: 'Hong Kong, China',
-    MO: 'Macao, China',
-  },
-}

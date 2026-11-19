@@ -1,12 +1,13 @@
+/** 由 scripts/generate-scss-types.mjs 生成；样式类名变化后重新运行 pnpm scss:types */
 declare const styles: {
   readonly anchor: string
   readonly card: string
+  readonly date: string
+  readonly divider: string
   readonly meta: string
   readonly siteIcon: string
   readonly siteName: string
-  readonly divider: string
-  readonly date: string
-  readonly title: string
   readonly snippet: string
+  readonly title: string
 }
 export = styles

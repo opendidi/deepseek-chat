@@ -3,6 +3,9 @@
   flex-direction: column;
   align-items: flex-end;
   padding-bottom: 16px;
+  // 与 AssistantMessage 一致：屏外消息跳过渲染，长会话滚动更省
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
 
   &.isFirst {
     padding-top: 34px;

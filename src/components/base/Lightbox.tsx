@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16, IconDownloadOutline16 } from './icons.js'
@@ -24,17 +24,29 @@ const download = (src: string, name: string) => {
 export const Lightbox = () => {
   const t = useTranslate()
   const image = useLightbox((state) => state.image)
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     if (!image) {
       return
     }
+    // 打开时移入焦点，关闭时归还；先于其他 effect 记录来源焦点
+    restoreFocusRef.current = document.activeElement as HTMLElement | null
+    document.querySelector<HTMLElement>('.lightbox-close')?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) {
         closeLightbox()
       }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (document.activeElement === document.body) {
+        const restore = restoreFocusRef.current
+        if (restore && document.contains(restore)) {
+          restore.focus()
+        }
+      }
+    }
   }, [image])
 
   if (!image) {
@@ -42,7 +54,13 @@ export const Lightbox = () => {
   }
   return createPortal(
     <div className={styles.mask} onClick={closeLightbox}>
-      <figure className={styles.figure} onClick={(event) => event.stopPropagation()}>
+      <figure
+        className={styles.figure}
+        role="dialog"
+        aria-modal="true"
+        aria-label={image.name}
+        onClick={(event) => event.stopPropagation()}
+      >
         <img className={styles.image} src={image.src} alt={image.name} />
         <figcaption className={styles.caption}>
           <span className={styles.name}>{image.name}</span>
@@ -57,7 +75,7 @@ export const Lightbox = () => {
             </button>
             <button
               type="button"
-              className={styles.action}
+              className={`${styles.action} lightbox-close`}
               aria-label={t('close')}
               onClick={closeLightbox}
             >

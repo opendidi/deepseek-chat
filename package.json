@@ -14,6 +14,7 @@
     "format": "oxfmt --write .",
     "icons": "node scripts/generate-icons.mjs",
     "scss:types": "node scripts/generate-scss-types.mjs",
+    "scss:types:check": "node scripts/generate-scss-types.mjs --check",
     "test:e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
@@ -48,6 +49,7 @@
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
     "cross-env": "^10.1.0",
+    "fake-indexeddb": "^6.2.8",
     "oxfmt": "0.48.0",
     "oxlint": "1.63.0",
     "sass-embedded": "^1.108.2",

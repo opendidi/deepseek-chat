@@ -11,6 +11,8 @@ import {
 import { setChatModel, setSearch, setThinking, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
+import { getVisibleMessages } from '../../services/chat/branches.js'
+import { requestMessageEdit } from '../messages/editRequestState.js'
 import {
   addDraftFiles,
   EMPTY_DRAFT,
@@ -285,6 +287,44 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     return false
   }
 
+  /** 正在生成时按 Esc 停止回答，与停止按钮等效 */
+  const stopStreamingKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (event.key === 'Escape' && !event.nativeEvent.isComposing && streaming && sessionId !== null) {
+      event.preventDefault()
+      stopReply(sessionId)
+      return true
+    }
+    return false
+  }
+
+  /** 空输入框按 ↑ 调出上一条提问的编辑（等同点该条消息的编辑按钮）；没有可编辑消息时交回输入历史 */
+  const editLastQuestionKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (
+      event.key !== 'ArrowUp' ||
+      event.nativeEvent.isComposing ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.shiftKey ||
+      sessionId === null ||
+      streaming ||
+      getDraft(sessionId).text !== ''
+    ) {
+      return false
+    }
+    const cache = useChatStore.getState().sessionCache
+    const session = Object.hasOwn(cache, sessionId) ? cache[sessionId] : undefined
+    const last = session
+      ? getVisibleMessages(session).filter((message) => message.role === 'user').at(-1)
+      : undefined
+    if (!last) {
+      return false
+    }
+    event.preventDefault()
+    requestMessageEdit(last.id)
+    return true
+  }
+
   return (
     <div
       className={clsx(styles.wrapper, sessionId === null ? styles.home : styles.session)}
@@ -327,6 +367,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
               send()
+              return
+            }
+            if (stopStreamingKeyDown(event) || editLastQuestionKeyDown(event)) {
               return
             }
             navigateHistory(event)

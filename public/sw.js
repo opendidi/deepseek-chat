@@ -6,7 +6,7 @@
 const CACHE = 'deepseek-chat-static-v1'
 
 self.addEventListener('install', (event) => {
-  // 不做预缓存：静态资源按需缓存，安装即激活
+  // 安装即激活；app shell 的预缓存在 activate 里做（需要拿到最新 index.html 引用的资源清单）
   event.waitUntil(self.skipWaiting())
 })
 
@@ -19,9 +19,40 @@ self.addEventListener('activate', (event) => {
         }
       }
       await self.clients.claim()
+      await precacheShell()
     })()
   )
 })
+
+/**
+ * 预缓存 app shell：以最新 index.html 引用到的同源静态资源为准提前入缓存。
+ * 懒加载 chunk（设置弹窗、公式、图表、语言包）只有加载过才有缓存，
+ * 没有这一步，离线打开时对应功能会失败。单个资源失败不阻塞其余缓存。
+ */
+async function precacheShell() {
+  const cache = await caches.open(CACHE)
+  let response
+  try {
+    response = await fetch('index.html', { cache: 'no-cache' })
+  } catch {
+    return
+  }
+  if (!response.ok) {
+    return
+  }
+  const html = await response.text()
+  const urls = new Set()
+  for (const match of html.matchAll(/(?:src|href)="(static\/[^"]+)"/g)) {
+    urls.add(match[1])
+  }
+  await Promise.all(
+    [...urls].map((url) =>
+      fetch(url)
+        .then((res) => (res.ok ? cache.put(url, res) : undefined))
+        .catch(() => undefined)
+    )
+  )
+}
 
 /** 缓存优先 + 后台更新；无缓存时直接走网络 */
 async function staleWhileRevalidate(request) {

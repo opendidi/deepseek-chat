@@ -1,6 +1,6 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
 import { IconEditOutline16, IconQuoteOutline16 } from '../base/icons.js'
 import { editMessage, retryUpload } from '../../services/chat/store.js'
@@ -14,6 +14,7 @@ import {
   type MessageVersions,
   type SelectMessageVersion,
 } from './BranchSwitcher.js'
+import { clearMessageEdit, useEditRequest } from './editRequestState.js'
 import { MessageFile } from './MessageFile.js'
 import { CopyButton } from './CopyButton.js'
 import { formatQuotedContent, splitQuotedContent } from '../../services/chat/quotes.js'
@@ -55,6 +56,16 @@ export const UserMessage = memo(function UserMessage({
       textarea.style.height = `${Math.min(textarea.scrollHeight, 202)}px`
     }
   }, [editing, draft])
+
+  // 输入框空置按 ↑ 请求编辑上一条提问：命中本条即进入编辑（等同点编辑按钮）
+  const requestedEdit = useEditRequest((state) => state.messageId)
+  useEffect(() => {
+    if (requestedEdit === message.id && !busy) {
+      setDraft(text)
+      setEditing(true)
+      clearMessageEdit(message.id)
+    }
+  }, [requestedEdit, message.id, busy, text])
 
   const sendEdit = () => {
     const next = formatQuotedContent(draft.trim(), quotes)

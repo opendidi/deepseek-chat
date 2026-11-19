@@ -281,8 +281,6 @@ const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) =>
   await Promise.all([...files.map((file) => tx.store.put(file)), tx.done])
 }
 
-export const saveFiles = (files: StoredFile[]): Promise<void> => putFiles('files', files)
-
 export const loadFile = async (id: string): Promise<Blob | undefined> =>
   (await (await getDB()).get('files', id))?.blob
 

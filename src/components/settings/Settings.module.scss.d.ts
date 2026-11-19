@@ -1,41 +1,61 @@
+/** 由 scripts/generate-scss-types.mjs 生成；样式类名变化后重新运行 pnpm scss:types */
 declare const styles: {
-  readonly dialog: string
-  readonly dialogMain: string
-  readonly navigation: string
-  readonly navItem: string
-  readonly navItemActive: string
-  readonly content: string
-  readonly cell: string
-  readonly row: string
-  readonly text: string
-  readonly label: string
-  readonly uploadButton: string
-  readonly locationCell: string
-  readonly locationSelectors: string
-  readonly provinceSelect: string
-  readonly citySelect: string
-  readonly regionSelect: string
-  readonly theme: string
-  readonly themeOptions: string
-  readonly themeOption: string
-  readonly themeOptionSelected: string
-  readonly description: string
-  readonly error: string
   readonly apiKey: string
-  readonly apiKeySaved: string
   readonly apiKeyInput: string
   readonly apiKeyMask: string
-  readonly divider: string
-  readonly confirm: string
+  readonly apiKeySaved: string
+  readonly cell: string
   readonly cellButton: string
+  readonly citySelect: string
+  readonly confirm: string
+  readonly content: string
+  readonly deleteActions: string
+  readonly deleteConfirm: string
+  readonly description: string
+  readonly dialog: string
+  readonly dialogMain: string
+  readonly divider: string
+  readonly error: string
+  readonly exportFields: string
+  readonly importConfirm: string
+  readonly importConfirmText: string
+  readonly importPassword: string
+  readonly label: string
+  readonly locationCell: string
+  readonly locationSelectors: string
   readonly mobileConfirm: string
+  readonly modelBadge: string
+  readonly navItem: string
+  readonly navItemActive: string
+  readonly navigation: string
+  readonly numberInput: string
+  readonly originInput: string
+  readonly paramActions: string
+  readonly paramUnit: string
+  readonly provinceSelect: string
+  readonly regionSelect: string
+  readonly row: string
   readonly switch: string
   readonly switchOn: string
   readonly switchThumb: string
-  readonly modelBadge: string
-  readonly importConfirm: string
-  readonly importConfirmText: string
-  readonly deleteConfirm: string
-  readonly deleteActions: string
+  readonly text: string
+  readonly textArea: string
+  readonly textInput: string
+  readonly theme: string
+  readonly themeOption: string
+  readonly themeOptionSelected: string
+  readonly themeOptions: string
+  readonly uploadButton: string
+  readonly usageBar: string
+  readonly usageBarColumn: string
+  readonly usageBarLabel: string
+  readonly usageBars: string
+  readonly usageContent: string
+  readonly usageDialog: string
+  readonly usageEmpty: string
+  readonly usageGrid: string
+  readonly usageItem: string
+  readonly usageLabel: string
+  readonly usageValue: string
 }
 export = styles
