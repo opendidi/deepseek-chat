@@ -49,6 +49,8 @@ type Settings = {
   agentTools: boolean
   /** 用量统计里服务端搜索/抓取是否按官方新规则免费 */
   usageFreeServerTools: boolean
+  /** 今日预估费用达到该金额时提醒一次（¥）；0 表示关闭 */
+  usageDailyQuota: number
   /** 自定义 API 服务地址；null 使用构建期默认值 */
   apiOrigin: string | null
   /** 自定义系统提示词（人设），随每次请求发送；空串表示未设置 */
@@ -78,6 +80,7 @@ const KEYS = {
   autoCompress: 'deepseek-chat:auto-compress',
   agentTools: 'deepseek-chat:agent-tools',
   usageFreeServerTools: 'deepseek-chat:usage-free-server-tools',
+  usageDailyQuota: 'deepseek-chat:usage-daily-quota',
   apiOrigin: 'deepseek-chat:api-origin',
   systemPrompt: 'deepseek-chat:system-prompt',
   fontSize: 'deepseek-chat:font-size',
@@ -230,6 +233,7 @@ export const useSettings = create<Settings>(() => ({
   autoCompress: initialFlag(KEYS.autoCompress, false),
   agentTools: initialFlag(KEYS.agentTools, false),
   usageFreeServerTools: initialFlag(KEYS.usageFreeServerTools, true),
+  usageDailyQuota: Math.max(0, Number(read(KEYS.usageDailyQuota)) || 0),
   apiOrigin: initialApiOrigin(),
   systemPrompt: initialSystemPrompt(),
   fontSize: initialFontSize(),
@@ -343,6 +347,13 @@ export const setAgentTools = (agentTools: boolean) => {
 export const setUsageFreeServerTools = (usageFreeServerTools: boolean) => {
   write(KEYS.usageFreeServerTools, String(usageFreeServerTools))
   useSettings.setState({ usageFreeServerTools })
+}
+
+/** 每日费用提醒额度；0 关闭，负数与非法值归零 */
+export const setUsageDailyQuota = (quota: number) => {
+  const value = Number.isFinite(quota) ? Math.max(0, Math.round(quota * 100) / 100) : 0
+  write(KEYS.usageDailyQuota, String(value))
+  useSettings.setState({ usageDailyQuota: value })
 }
 
 export const setMaxTokens = (maxTokens: number | null) => {

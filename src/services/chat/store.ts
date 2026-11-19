@@ -20,7 +20,10 @@ import { compressMessages } from './compress.js'
 import { runToolSteps } from './agentLoop.js'
 import { formatQuotedContent } from './quotes.js'
 import { readActiveSessionId, writeActiveSessionId } from './activeSession.js'
+import { checkDailyQuota, recordUsage } from './usageLedger.js'
+import { showToast } from '../../components/base/toastState.js'
 import { clientToolParams } from '../agent/tools.js'
+import { BASE_SYSTEM_PROMPT, serverTools } from './requestShape.js'
 import {
   applyEvent,
   canContinueReply,
@@ -42,8 +45,6 @@ import {
 
 /** 未记录模型的旧消息、续写时兜底使用的默认模型 */
 const DEFAULT_MODEL = 'deepseek-flash' as const
-/** 所有生成请求统一携带的助手身份说明 */
-const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 采样温度允许的范围 */
 const TEMPERATURE_RANGE = { min: 0, max: 2 } as const
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
@@ -56,17 +57,6 @@ const SAFETY_CHECK = { level: 'high' } as const
 const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
-
-/** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
-const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
-  const tools: CreateMessageRequest['tools'] = [
-    { type: 'deepseek_read_url', name: 'deepseek_read_url' },
-  ]
-  if (search) {
-    tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
-  }
-  return tools
-}
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
@@ -1117,7 +1107,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const { apiKey, temperature, topP, maxTokens, systemPrompt } = settings
         const persona = systemPrompt.trim()
         const { messages, summary } = compressMessages(rawMessages, settings.autoCompress)
-        const system = [SYSTEM_PROMPT, persona, summary].filter(Boolean).join('\n\n')
+        const system = [BASE_SYSTEM_PROMPT, persona, summary].filter(Boolean).join('\n\n')
         let requestMessages = messages
         const tools: CreateMessageRequest['tools'] = [
           ...serverTools(initial.search ?? false),
@@ -1288,5 +1278,29 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       ),
     }))
     persist(sessionId)
+    // 一轮请求只记一次账：服务端上报了 usage 就写入，含中途失败与用户停止。
+    // 账本只存聚合数字，不含对话正文；统计页的明细仍以会话消息为准，避免双算。
+    if (reply.usage) {
+      recordUsage({
+        at: Date.now(),
+        model: reply.model,
+        sessionId,
+        title: getSession(sessionId)?.title ?? '',
+        usage: reply.usage,
+        pageFetch: reply.blocks.filter(
+          (block) =>
+            block.type === 'web_fetch_tool_result' &&
+            block.content.type === 'web_fetch_result'
+        ).length,
+        freeServerTools: useSettings.getState().usageFreeServerTools,
+      })
+      const quota = checkDailyQuota(useSettings.getState().usageDailyQuota)
+      if (quota) {
+        showToast({
+          key: 'usageQuotaReached',
+          params: { cost: quota.cost.toFixed(2) },
+        })
+      }
+    }
   }
 }

@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import clsx from 'clsx'
 import { useTranslate } from '../../i18n/index.js'
-import { BUILTIN_MODELS } from '../../services/models.js'
-import { setUsageFreeServerTools, useSettings } from '../../services/settings.js'
+import { setUsageDailyQuota, setUsageFreeServerTools, useSettings } from '../../services/settings.js'
 import { selectSession } from '../../services/chat/store.js'
 import {
   collectDetailedUsage,
-  EXTRA_PRICES,
   type DetailedUsage,
+  type ShareItem,
 } from '../../services/chat/detailedUsage.js'
+import { EXTRA_PRICES } from '../../services/chat/usagePricing.js'
 import type { UsageRange } from '../../services/chat/usageRange.js'
-import { clearLedger } from '../../services/chat/usageLedger.js'
+import {
+  clearLedger,
+  clearLedgerSession,
+  clearLedgerSessions,
+  hideAllRecords,
+  hideRecord,
+} from '../../services/chat/usageLedger.js'
 import { closeSettings } from './settingsDialogState.js'
 import { SettingSwitch } from './settingsShared.js'
 import { showToast } from '../base/toastState.js'
@@ -24,15 +30,25 @@ import {
   formatMoney,
   formatNumber,
   heatLevel,
+  hourLabelIndices,
+  hourPeak,
   metricText,
   metricValue,
+  percent,
   shortDate,
   type UsageMetric,
 } from '../../utils/usageChart.js'
+import {
+  DonutChart,
+  DonutLegend,
+  PressureMeter,
+  type DonutItem,
+} from '../usage/UsageVisuals.js'
 import styles from './UsagePanel.module.scss'
 
 type Metric = UsageMetric
 type ChartTip = { x: number; y: number; index: number; side: 'left' | 'right' }
+type HourTip = { x: number; y: number; hour: number; side: 'left' | 'right' }
 
 const RANGES: { value: UsageRange; label: 'usageRangeToday' | 'usageRange7d' | 'usageRange30d' }[] = [
   { value: 'today', label: 'usageRangeToday' },
@@ -40,41 +56,70 @@ const RANGES: { value: UsageRange; label: 'usageRangeToday' | 'usageRange7d' | '
   { value: '30d', label: 'usageRange30d' },
 ]
 
-const METRICS: { value: Metric; label: 'usageMetricTokens' | 'usageMetricCost' | 'usageMetricReplies' }[] = [
-  { value: 'tokens', label: 'usageMetricTokens' },
-  { value: 'cost', label: 'usageMetricCost' },
-  { value: 'replies', label: 'usageMetricReplies' },
+const METRICS: { value: Metric; label: 'usageTrendToken' | 'usageTrendCost' | 'usageTrendReplies' }[] = [
+  { value: 'tokens', label: 'usageTrendToken' },
+  { value: 'cost', label: 'usageTrendCost' },
+  { value: 'replies', label: 'usageTrendReplies' },
 ]
 
 /** 热力图按活动强度分四级，避免连续透明度让空白格子也显得像有数据 */
 const HEAT_LEVELS = [styles.level0, styles.level1, styles.level2, styles.level3]
 
-/** 每日消耗柱状图 + 活动热力图：指标切换、悬浮数据浮层都只在图内部管理 */
-const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
+const COMPOSITION_COLORS = [
+  'var(--dsw-alias-brand-primary)',
+  'var(--dsw-static-blue-300)',
+  'var(--dsw-static-amber-400)',
+  'var(--dsw-static-green-400)',
+]
+
+const CATEGORY_COLORS = [
+  'var(--dsw-alias-brand-primary)',
+  'var(--dsw-static-blue-300)',
+  'var(--dsw-static-amber-400)',
+  'var(--dsw-static-green-400)',
+  'var(--dsw-static-blue-600)',
+  'var(--dsw-static-amber-600)',
+  'var(--dsw-static-green-500)',
+  'var(--dsw-static-blue-800)',
+]
+
+const csvCell = (value: string | number): string => {
+  const text = String(value)
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+/** 每日趋势双柱（token 模式右柱为费用）+ 固定 8 周热力图 */
+const UsageDailyChart = ({ data }: { data: DetailedUsage }) => {
   const t = useTranslate()
+  const { daily, heatmap } = data
   const [metric, setMetric] = useState<Metric>('tokens')
   const [tip, setTip] = useState<ChartTip | null>(null)
+  const [heatIndex, setHeatIndex] = useState<number | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
   const maxDaily = useMemo(
     () => Math.max(1, ...daily.map((day) => metricValue(day, metric))),
     [daily, metric]
   )
-  const peakValue = useMemo(() => Math.max(0, ...daily.map((day) => metricValue(day, metric))), [daily, metric])
-  const peakDay = daily.find((day) => metricValue(day, metric) === peakValue)
-  const activeDays = useMemo(
-    () => daily.filter((day) => metricValue(day, metric) > 0).length,
+  const maxCost = useMemo(() => Math.max(1, ...daily.map((day) => day.cost)), [daily])
+  const peakValue = useMemo(
+    () => Math.max(0, ...daily.map((day) => metricValue(day, metric))),
     [daily, metric]
   )
+  const peakDay = daily.find((day) => metricValue(day, metric) === peakValue)
   const labelIndices = useMemo(() => chartLabelIndices(daily.length), [daily.length])
+  const heatMax = useMemo(
+    () => Math.max(1, ...heatmap.map((day) => metricValue(day, metric))),
+    [heatmap, metric]
+  )
+  const heatActive = heatmap.filter((day) => metricValue(day, metric) > 0).length
   const calendarDays = useMemo(
-    () => calendarCells(daily.map((day, index) => ({ ...day, index }))),
-    [daily]
+    () => calendarCells(heatmap.map((day, index) => ({ ...day, index }))),
+    [heatmap]
   )
   const weekNames = t('usageWeekdays').trim().split(/\s+/)
   const tipDay = tip ? daily[tip.index] : undefined
 
-  /** 悬浮时把当日的三项用量显示在卡片内的小浮层上 */
   const showTip = (event: MouseEvent<HTMLElement>, index: number) => {
     const card = cardRef.current?.getBoundingClientRect()
     if (!card) {
@@ -107,7 +152,7 @@ const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
   return (
     <section className={styles.section}>
       <div className={styles.sectionHead}>
-        <h4 className={styles.sectionTitle}>{t('usageDailyTitle')}</h4>
+        <h4 className={styles.sectionTitle}>{t('usageTrendTitle')}</h4>
         <div className={styles.segments}>
           {METRICS.map((item) => (
             <button
@@ -131,7 +176,9 @@ const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
                 })
               : t('usageChartNoData')}
           </span>
-          {daily.length > 1 ? (
+          {metric === 'tokens' ? (
+            <span className={styles.chartMetaDate}>{t('usageTrendSecondary')}</span>
+          ) : daily.length > 1 ? (
             <span className={styles.chartMetaDate}>
               {shortDate(daily[0]?.date ?? '')} – {shortDate(daily[daily.length - 1]?.date ?? '')}
             </span>
@@ -153,6 +200,7 @@ const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
             <div className={styles.bars}>
               {daily.map((day, index) => {
                 const value = metricValue(day, metric)
+                const cost = day.cost
                 return (
                   <div
                     key={day.date}
@@ -161,13 +209,28 @@ const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
                       tip?.index === index && styles.barColumnActive
                     )}
                   >
-                    <div
-                      className={clsx(styles.bar, value === 0 && styles.barEmpty)}
-                      style={{
-                        height:
-                          value === 0 ? 2 : `${Math.max(3, Math.round((value / maxDaily) * 100))}%`,
-                      }}
-                    />
+                    <div className={styles.barPair}>
+                      <div
+                        className={clsx(styles.bar, value === 0 && styles.barEmpty)}
+                        style={{
+                          height:
+                            value === 0
+                              ? 2
+                              : `${Math.max(3, Math.round((value / maxDaily) * 100))}%`,
+                        }}
+                      />
+                      {metric === 'tokens' ? (
+                        <div
+                          className={clsx(styles.bar, styles.barSecondary, cost === 0 && styles.barEmpty)}
+                          style={{
+                            height:
+                              cost === 0
+                                ? 2
+                                : `${Math.max(3, Math.round((cost / maxCost) * 100))}%`,
+                          }}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                 )
               })}
@@ -186,55 +249,54 @@ const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
           </div>
         </div>
 
-        {daily.length > 7 ? (
-          <>
-            <div className={styles.chartDivider} />
-            <div className={styles.heatBlock}>
-              <div className={styles.heatHead}>
-                <span className={styles.subLabel}>{t('usageHeatmapTitle')}</span>
-                <span className={styles.heatHeadStat}>
-                  <strong>{activeDays}</strong> / {daily.length} {t('usageActiveDaysLabel')}
+        <div className={styles.chartDivider} />
+        <div className={styles.heatBlock}>
+          <div className={styles.heatHead}>
+            <span className={styles.subLabel}>
+              {t('usageHeatmapTitle')} · {t('usageHeatWindow')}
+            </span>
+            <span className={styles.heatHeadStat}>
+              {t('usageHeatActive', { count: heatActive })}
+            </span>
+          </div>
+          <div className={styles.calendarHeader}>
+            {weekNames.map((name, index) => (
+              <span key={index}>{name}</span>
+            ))}
+          </div>
+          <div className={styles.heatmap} onMouseLeave={() => setHeatIndex(null)}>
+            {calendarDays.map((day, index) => {
+              if (!day) {
+                return <span key={`void-${index}`} className={styles.heatCellVoid} />
+              }
+              const value = metricValue(day, metric)
+              return (
+                <span
+                  key={day.date}
+                  className={clsx(
+                    styles.heatCell,
+                    HEAT_LEVELS[heatLevel(value, heatMax)],
+                    heatIndex === day.index && styles.heatCellActive
+                  )}
+                  title={`${shortDate(day.date)} · ${metricText(value, metric)}`}
+                  onMouseEnter={() => setHeatIndex(day.index)}
+                >
+                  <span className={styles.heatDay}>{dayOfMonth(day.date)}</span>
                 </span>
-              </div>
-              <div className={styles.calendarHeader}>
-                {weekNames.map((name, index) => (
-                  <span key={index}>{name}</span>
-                ))}
-              </div>
-              <div className={styles.heatmap} onMouseLeave={() => setTip(null)}>
-                {calendarDays.map((day, index) => {
-                  if (!day) {
-                    return <span key={`void-${index}`} className={styles.heatCellVoid} />
-                  }
-                  const value = metricValue(day, metric)
-                  return (
-                    <span
-                      key={day.date}
-                      className={clsx(
-                        styles.heatCell,
-                        HEAT_LEVELS[heatLevel(value, maxDaily)],
-                        tip?.index === day.index && styles.heatCellActive
-                      )}
-                      onMouseEnter={(event) => showTip(event, day.index)}
-                    >
-                      <span className={styles.heatDay}>{dayOfMonth(day.date)}</span>
-                    </span>
-                  )
-                })}
-              </div>
-              <div className={styles.heatFooter}>
-                <span className={styles.subLabel}>{t('usageHeatHint')}</span>
-                <div className={styles.legend}>
-                  <span>{t('usageHeatLess')}</span>
-                  {HEAT_LEVELS.map((level, index) => (
-                    <span key={index} className={clsx(styles.legendCell, level)} />
-                  ))}
-                  <span>{t('usageHeatMore')}</span>
-                </div>
-              </div>
+              )
+            })}
+          </div>
+          <div className={styles.heatFooter}>
+            <span className={styles.subLabel}>{t('usageHeatHint')}</span>
+            <div className={styles.legend}>
+              <span>{t('usageHeatLess')}</span>
+              {HEAT_LEVELS.map((level, index) => (
+                <span key={index} className={clsx(styles.legendCell, level)} />
+              ))}
+              <span>{t('usageHeatMore')}</span>
             </div>
-          </>
-        ) : null}
+          </div>
+        </div>
 
         {tip && tipDay ? (
           <div
@@ -243,21 +305,34 @@ const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
             role="tooltip"
           >
             <div className={styles.tooltipDate}>{shortDate(tipDay.date)}</div>
-            <div
-              className={clsx(styles.tooltipRow, metric === 'tokens' && styles.tooltipRowActive)}
-            >
-              <span>{t('usageMetricTokens')}</span>
+            <div className={clsx(styles.tooltipRow, metric === 'tokens' && styles.tooltipRowActive)}>
+              <span>{t('usageTrendToken')}</span>
               <strong>{formatNumber(tipDay.tokens)}</strong>
             </div>
             <div className={clsx(styles.tooltipRow, metric === 'cost' && styles.tooltipRowActive)}>
-              <span>{t('usageMetricCost')}</span>
+              <span>{t('usageTrendCost')}</span>
               <strong>{formatMoney(tipDay.cost)}</strong>
             </div>
-            <div
-              className={clsx(styles.tooltipRow, metric === 'replies' && styles.tooltipRowActive)}
-            >
-              <span>{t('usageMetricReplies')}</span>
+            <div className={clsx(styles.tooltipRow, metric === 'replies' && styles.tooltipRowActive)}>
+              <span>{t('usageTrendReplies')}</span>
               <strong>{formatNumber(tipDay.replies)}</strong>
+            </div>
+            <div className={styles.tooltipDivider} />
+            <div className={styles.tooltipRow}>
+              <span>{t('usageCompositionMiss')}</span>
+              <strong>{formatNumber(tipDay.input)}</strong>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span>{t('usageCompositionHit')}</span>
+              <strong>{formatNumber(tipDay.cacheRead)}</strong>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span>{t('usageCompositionWrite')}</span>
+              <strong>{formatNumber(tipDay.cacheWrite)}</strong>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span>{t('usageCompositionOutput')}</span>
+              <strong>{formatNumber(tipDay.output)}</strong>
             </div>
           </div>
         ) : null}
@@ -266,8 +341,248 @@ const UsageDailyChart = ({ daily }: { daily: DetailedUsage['daily'] }) => {
   )
 }
 
-/** 计费口径：免费开关 + 各项单价 */
-const UsageBilling = ({ freeServerTools }: { freeServerTools: boolean }) => {
+/** 24 小时请求分布：悬浮绘图区任意位置显示该小时的请求数与占比 */
+const HourlyChart = ({ hours }: { hours: readonly number[] }) => {
+  const t = useTranslate()
+  const max = Math.max(1, ...hours)
+  const peak = hourPeak(hours)
+  const total = hours.reduce((sum, count) => sum + (count ?? 0), 0)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [tip, setTip] = useState<HourTip | null>(null)
+  const tipCount = tip ? (hours[tip.hour] ?? 0) : 0
+
+  const showTip = (event: MouseEvent<HTMLElement>, hour: number) => {
+    const card = cardRef.current?.getBoundingClientRect()
+    if (!card) {
+      return
+    }
+    const x = Math.max(70, Math.min(card.width - 70, event.clientX - card.left))
+    const y = Math.max(44, Math.min(card.height - 44, event.clientY - card.top))
+    const side: HourTip['side'] = x > card.width - 150 ? 'left' : 'right'
+    setTip((prev) =>
+      prev &&
+      prev.hour === hour &&
+      prev.side === side &&
+      Math.abs(prev.x - x) < 4 &&
+      Math.abs(prev.y - y) < 4
+        ? prev
+        : { x, y, hour, side }
+    )
+  }
+
+  /** 按横向比例换算成小时列，柱间空隙也能显示数据 */
+  const onPlotMove = (event: MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const ratio = (event.clientX - rect.left) / Math.max(1, rect.width)
+    showTip(event, Math.max(0, Math.min(23, Math.floor(ratio * 24))))
+  }
+
+  return (
+    <section className={styles.section}>
+      <h4 className={styles.sectionTitle}>{t('usageHourlyTitle')}</h4>
+      <div ref={cardRef} className={styles.hourCard}>
+        <div className={styles.hourMeta}>
+          <span className={styles.hourMetaMax}>{t('usageHourlyMax', { count: max })}</span>
+          <span className={styles.hourMetaPeak}>
+            {peak
+              ? t('usageHourlyPeak', {
+                  hour: String(peak.hour).padStart(2, '0'),
+                  next: String((peak.hour + 1) % 24).padStart(2, '0'),
+                  count: peak.count,
+                })
+              : t('usageHourlyNoData')}
+          </span>
+        </div>
+        <div className={styles.hourPlot} onMouseLeave={() => setTip(null)}>
+          <div className={styles.hourAxis}>
+            <span>{max}</span>
+            <span>{Math.round(max / 2)}</span>
+            <span>0</span>
+          </div>
+          <div className={styles.hourPlotMain} onMouseMove={onPlotMove}>
+            <div className={styles.hourGrid}>
+              <span className={styles.hourGridLine} />
+              <span className={styles.hourGridLine} />
+              <span className={styles.hourGridLine} />
+            </div>
+            <div className={styles.hourBars}>
+              {Array.from({ length: 24 }, (_, hour) => {
+                const count = hours[hour] ?? 0
+                return (
+                  <div
+                    key={hour}
+                    className={clsx(
+                      styles.hourColumn,
+                      tip?.hour === hour && styles.hourColumnActive
+                    )}
+                  >
+                    <div
+                      className={clsx(
+                        styles.hourBar,
+                        count === 0 && styles.barEmpty,
+                        peak?.hour === hour && styles.hourBarPeak,
+                        tip?.hour === hour && styles.hourBarActive
+                      )}
+                      style={{ height: `${Math.max(3, Math.round((count / max) * 100))}%` }}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+        <div className={styles.hourLabelRow}>
+          <span className={styles.hourAxisSpacer} />
+          <div className={styles.hourLabels}>
+            {Array.from({ length: 24 }, (_, hour) => (
+              <span key={hour}>
+                {hourLabelIndices.has(hour) ? String(hour).padStart(2, '0') : ''}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className={styles.hint}>{t('usageHourlyHint')}</div>
+
+        {tip ? (
+          <div
+            className={clsx(styles.tooltip, tip.side === 'left' && styles.tooltipLeft)}
+            style={{ left: tip.x, top: tip.y }}
+            role="tooltip"
+          >
+            <div className={styles.tooltipDate}>
+              {String(tip.hour).padStart(2, '0')}:00–
+              {String((tip.hour + 1) % 24).padStart(2, '0')}:00
+              {peak?.hour === tip.hour ? (
+                <span className={styles.tooltipTag}>{t('usageHourlyPeakTag')}</span>
+              ) : null}
+            </div>
+            <div className={styles.tooltipRow}>
+              <span>{t('usageKpiRequests')}</span>
+              <strong>{formatNumber(tipCount)}</strong>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span>{t('usageHourlyShare')}</span>
+              <strong>{percent(tipCount, total)}%</strong>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+/** 输入构成环：四类 Token 各自带 token 与占比 */
+const CompositionSection = ({ items }: { items: readonly ShareItem[] }) => {
+  const t = useTranslate()
+  const total = items.reduce((sum, item) => sum + item.tokens, 0)
+  const donutItems: DonutItem[] = items.map((item, index) => ({
+    key: item.key,
+    label: t(item.key),
+    value: item.tokens,
+    color: COMPOSITION_COLORS[index % COMPOSITION_COLORS.length],
+  }))
+  return (
+    <section className={styles.section}>
+      <h4 className={styles.sectionTitle}>{t('usageCompositionTitle')}</h4>
+      {total === 0 ? (
+        <div className={styles.emptyBox}>{t('usageCompositionEmpty')}</div>
+      ) : (
+        <div className={styles.compositionBox}>
+          <DonutChart
+            items={donutItems}
+            centerValue={formatNumber(total)}
+            centerLabel={t('usageMetricTokens')}
+          />
+          <DonutLegend items={donutItems} formatValue={formatNumber} />
+        </div>
+      )}
+      <div className={styles.hint}>{t('usageCompositionHint')}</div>
+    </section>
+  )
+}
+
+/** 上下文分类：当前会话最近一轮请求按八类估算 token 与占比 */
+const ContextBreakdownSection = ({ items }: { items: readonly ShareItem[] }) => {
+  const t = useTranslate()
+  const total = items.reduce((sum, item) => sum + item.tokens, 0)
+  const max = Math.max(1, ...items.map((item) => item.tokens))
+  return (
+    <section className={styles.section}>
+      <h4 className={styles.sectionTitle}>{t('usageContextTitle')}</h4>
+      {total === 0 ? (
+        <div className={styles.emptyBox}>{t('usageContextBreakdownEmpty')}</div>
+      ) : (
+        <div className={styles.categoryList}>
+          {items.map((item, index) => (
+            <div
+              key={item.key}
+              className={clsx(styles.categoryRow, item.tokens === 0 && styles.categoryMuted)}
+            >
+              <span className={styles.categoryDot} style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }} />
+              <span className={styles.categoryLabel}>{t(item.key)}</span>
+              <span className={styles.categoryBar}>
+                <span
+                  style={{
+                    width: `${(item.tokens / max) * 100}%`,
+                    backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+                  }}
+                />
+              </span>
+              <span className={styles.categoryValue}>{formatNumber(item.tokens)}</span>
+              <span className={styles.categoryShare}>{item.share}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className={styles.hint}>{t('usageContextBreakdownHint')}</div>
+    </section>
+  )
+}
+
+/** 今日用量：与 400 天账本分开存储，跨天自动归零，同时配置每日额度提醒 */
+const DailyQuota = ({ data }: { data: DetailedUsage }) => {
+  const t = useTranslate()
+  const quota = useSettings((state) => state.usageDailyQuota)
+  return (
+    <section className={styles.section}>
+      <h4 className={styles.sectionTitle}>{t('usageTodayTitle')}</h4>
+      <div className={styles.extraGrid}>
+        <div className={styles.extra}>
+          <span className={styles.kpiLabel}>{t('usageTodayRequests')}</span>
+          <span className={styles.kpiValue}>{formatNumber(data.today.requests)}</span>
+        </div>
+        <div className={styles.extra}>
+          <span className={styles.kpiLabel}>{t('usageTodayTokens')}</span>
+          <span className={styles.kpiValue}>{formatNumber(data.today.tokens)}</span>
+        </div>
+        <div className={styles.extra}>
+          <span className={styles.kpiLabel}>{t('usageTodayCost')}</span>
+          <span className={styles.kpiValue}>{formatMoney(data.today.cost)}</span>
+        </div>
+        <div className={styles.extra}>
+          <span className={styles.kpiLabel}>{t('usageKpiWebSearch')}</span>
+          <span className={styles.kpiValue}>{formatNumber(data.today.webSearch)}</span>
+        </div>
+      </div>
+      <label className={styles.quotaRow}>
+        <span>{t('usageDailyQuota')}</span>
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          value={quota}
+          className={styles.quotaInput}
+          onChange={(event) => setUsageDailyQuota(Number(event.target.value))}
+        />
+        <span>¥</span>
+      </label>
+      <div className={styles.hint}>{t('usageDailyQuotaDesc')}</div>
+    </section>
+  )
+}
+
+/** 计费口径：按模型列出未命中 / 命中 / 输出单价，并摊开附加项与高峰规则 */
+const UsageBilling = ({ data, freeServerTools }: { data: DetailedUsage; freeServerTools: boolean }) => {
   const t = useTranslate()
   return (
     <section className={styles.section}>
@@ -279,13 +594,24 @@ const UsageBilling = ({ freeServerTools }: { freeServerTools: boolean }) => {
           checked={freeServerTools}
           onChange={setUsageFreeServerTools}
         />
-        <div className={styles.priceTable}>
-          {BUILTIN_MODELS.map((model) => (
-            <div key={model.id} className={styles.priceRow}>
-              <span>{model.name}</span>
-              <span>¥{model.prices?.join(' / ¥') ?? '—'}</span>
+        <div className={styles.priceUnit}>{t('usageBillingUnit')}</div>
+        <div className={styles.priceTable4}>
+          <div className={styles.priceHead}>
+            <span>{t('usageBillingModel')}</span>
+            <span>{t('usageBillingMiss')}</span>
+            <span>{t('usageBillingHit')}</span>
+            <span>{t('usageBillingOutput')}</span>
+          </div>
+          {data.billing.map((item) => (
+            <div key={item.model} className={styles.priceRow4}>
+              <span>{item.name}</span>
+              <span>¥{item.prices[1].toFixed(2)}</span>
+              <span>¥{item.prices[0].toFixed(2)}</span>
+              <span>¥{item.prices[2].toFixed(2)}</span>
             </div>
           ))}
+        </div>
+        <div className={styles.priceTable}>
           <div className={styles.priceRow}>
             <span>{t('usagePriceSearch')}</span>
             <span>
@@ -313,20 +639,11 @@ const UsageBilling = ({ freeServerTools }: { freeServerTools: boolean }) => {
   )
 }
 
-/** 上下文统计管理：窗口占用、导出与清空账本 */
-const UsageContextManage = ({
-  context,
-  data,
-  onReload,
-}: {
-  context: DetailedUsage['context'] | undefined
-  data: DetailedUsage
-  onReload: () => void
-}) => {
+/** 上下文统计管理：窗口与压缩阈值、会话记录表格、清除与导出 */
+const UsageContextManage = ({ data, onReload }: { data: DetailedUsage; onReload: () => void }) => {
   const t = useTranslate()
-  const windowPercent = context
-    ? Math.min(100, Math.round((context.current / (context.window - context.reserve)) * 100))
-    : 0
+  const { context } = data
+  const windowPercent = Math.min(100, Math.round((context.current / (context.window - context.reserve)) * 100))
 
   const exportJson = () => {
     downloadBlob(
@@ -336,22 +653,53 @@ const UsageContextManage = ({
   }
 
   const exportCsv = () => {
-    const rows = [
-      ['date', 'tokens', 'cost', 'replies'].join(','),
-      ...data.daily.map((day) =>
-        [day.date, day.tokens, day.cost.toFixed(6), day.replies].join(',')
-      ),
-      '',
-      ['metric', 'value'].join(','),
-      ['web_search', data.totals?.webSearch ?? 0].join(','),
-      ['pages_parsed', data.totals?.pageFetch ?? 0].join(','),
-      ['tts_chars', data.totals?.ttsChars ?? 0].join(','),
-      ['asr_seconds', data.totals?.asrSeconds ?? 0].join(','),
+    const rows: (string | number)[][] = [
+      ['date', 'tokens', 'cost', 'replies', 'miss_input', 'cache_write', 'cache_hit', 'output'],
+      ...data.daily.map((day) => [
+        day.date, day.tokens, day.cost.toFixed(6), day.replies,
+        day.input, day.cacheWrite, day.cacheRead, day.output,
+      ]),
+      [],
+      ['hour', 'requests'],
+      ...data.hourly.map((count, hour) => [hour, count]),
+      [],
+      ['model', 'requests', 'tokens', 'cost'],
+      ...data.byModel.map((item) => [item.name, item.replies, item.tokens, item.cost.toFixed(6)]),
+      [],
+      ['session', 'tokens', 'cost', 'replies'],
+      ...data.bySession.map((item) => [item.title, item.tokens, item.cost.toFixed(6), item.replies]),
+      [],
+      ['context_record', 'tokens', 'window_percent', 'last_request'],
+      ...data.contextRecords.map((item) => [
+        item.title, item.tokens, item.percent, new Date(item.lastAt).toISOString(),
+      ]),
+      [],
+      ['metric', 'value'],
+      ['web_search', data.totals.webSearch],
+      ['pages_parsed', data.totals.pageFetch],
+      ['tts_chars', data.totals.ttsChars],
+      ['asr_seconds', data.totals.asrSeconds],
     ]
     downloadBlob(
       `usage-${data.range}.csv`,
-      new Blob([`\ufeff${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+      new Blob([`\ufeff${rows.map((row) => row.map(csvCell).join(',')).join('\n')}`], {
+        type: 'text/csv;charset=utf-8',
+      })
     )
+  }
+
+  const removeRecord = (id: string) => {
+    hideRecord(id)
+    clearLedgerSession(id)
+    onReload()
+    showToast({ key: 'usageRecordRemoved' })
+  }
+
+  const clearRecords = () => {
+    hideAllRecords(data.contextRecords.map((item) => item.id))
+    clearLedgerSessions()
+    onReload()
+    showToast({ key: 'usageRecordsCleared' })
   }
 
   return (
@@ -360,28 +708,52 @@ const UsageContextManage = ({
       <div className={styles.contextGrid}>
         <div className={styles.contextItem}>
           <span className={styles.kpiLabel}>{t('usageContextCurrent')}</span>
-          <span className={styles.kpiValue}>{formatNumber(context?.current ?? 0)} / 1.00M</span>
+          <span className={styles.kpiValue}>{formatNumber(context.current)}</span>
         </div>
         <div className={styles.contextItem}>
           <span className={styles.kpiLabel}>{t('usageContextWindow')}</span>
           <span className={styles.kpiValue}>{windowPercent}%</span>
         </div>
         <div className={styles.contextItem}>
-          <span className={styles.kpiLabel}>{t('usageContextTracked')}</span>
-          <span className={styles.kpiValue}>{formatNumber(context?.tracked ?? 0)}</span>
+          <span className={styles.kpiLabel}>{t('usageContextRemaining')}</span>
+          <span className={styles.kpiValue}>{formatNumber(context.remaining)}</span>
         </div>
         <div className={styles.contextItem}>
-          <span className={styles.kpiLabel}>{t('usageContextTotal')}</span>
-          <span className={styles.kpiValue}>{formatNumber(context?.total ?? 0)}</span>
+          <span className={styles.kpiLabel}>{t('usageContextCompressAt')}</span>
+          <span className={styles.kpiValue}>{formatNumber(context.compressAt)}</span>
         </div>
       </div>
-      <div className={styles.progress}>
-        <span style={{ width: `${windowPercent}%` }} />
-      </div>
+      <PressureMeter value={context.current} max={context.window - context.reserve} compressAt={context.compressAt} />
       <div className={styles.hint}>{t('usageContextWindowHint')}</div>
-      {context?.total === 0 ? (
+
+      <div className={styles.subLabel}>{t('usageRecordsTitle')}</div>
+      {data.contextRecords.length === 0 ? (
         <div className={styles.emptyBox}>{t('usageContextRecordsEmpty')}</div>
-      ) : null}
+      ) : (
+        <div className={styles.recordTable}>
+          <div className={styles.recordHead}>
+            <span>{t('usageRecordsSession')}</span>
+            <span>{t('usageRecordsTokens')}</span>
+            <span>{t('usageRecordsShare')}</span>
+            <span>{t('usageRecordsLast')}</span>
+            <span />
+          </div>
+          {data.contextRecords.slice(0, 20).map((item) => (
+            <div key={item.id} className={styles.recordRow}>
+              <span className={styles.recordName} title={item.title || undefined}>
+                {item.title || t('untitledChat')}
+              </span>
+              <span>{formatNumber(item.tokens)}</span>
+              <span>{item.percent}%</span>
+              <span>{item.lastAt ? shortDate(new Date(item.lastAt).toISOString().slice(0, 10)) : '—'}</span>
+              <button type="button" className={styles.linkButton} onClick={() => removeRecord(item.id)}>
+                {t('usageRecordsRemove')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className={styles.actions}>
         <button type="button" className={styles.action} onClick={onReload}>
           {t('usageRefresh')}
@@ -391,6 +763,9 @@ const UsageContextManage = ({
         </button>
         <button type="button" className={styles.action} onClick={exportCsv}>
           {t('usageExportCsv')}
+        </button>
+        <button type="button" className={styles.action} onClick={clearRecords}>
+          {t('usageRecordsClearAll')}
         </button>
         <button
           type="button"
@@ -444,12 +819,12 @@ export const UsagePanel = () => {
 
   const totals = data?.totals
   const kpis: { label: string; value: string }[] = [
+    { label: t('usageKpiTotalTokens'), value: formatNumber(totals?.tokens ?? 0) },
     { label: t('usageKpiCost'), value: formatMoney(totals?.cost ?? 0) },
-    { label: t('usageKpiReplies'), value: formatNumber(totals?.replies ?? 0) },
-    { label: t('usageKpiInput'), value: formatNumber(totals?.inputTokens ?? 0) },
-    { label: t('usageKpiOutput'), value: formatNumber(totals?.outputTokens ?? 0) },
-    { label: t('usageKpiCached'), value: formatNumber(totals?.cachedTokens ?? 0) },
-    { label: t('usageKpiCalls'), value: formatNumber(totals?.modelCalls ?? 0) },
+    { label: t('usageKpiCacheHitRate'), value: `${totals?.cacheHitRate ?? 0}%` },
+    { label: t('usageKpiRequests'), value: formatNumber(totals?.modelCalls ?? 0) },
+    { label: t('usageKpiActiveDays'), value: formatNumber(totals?.activeDays ?? 0) },
+    { label: t('usageKpiWebSearch'), value: formatNumber(totals?.webSearch ?? 0) },
   ]
 
   const extras = [
@@ -501,21 +876,28 @@ export const UsagePanel = () => {
             ))}
           </div>
 
-          <UsageDailyChart daily={data.daily} />
+          <UsageDailyChart data={data} />
+          <HourlyChart hours={data.hourly} />
+          <CompositionSection items={data.composition} />
 
           <section className={styles.section}>
             <h4 className={styles.sectionTitle}>{t('usageModelTitle')}</h4>
             {data.byModel.length === 0 ? (
               <div className={styles.emptyBox}>{t('usageEmptyHint')}</div>
             ) : (
-              <div className={styles.rows}>
+              <div className={styles.dataTable}>
+                <div className={styles.dataHead}>
+                  <span>{t('usageBillingModel')}</span>
+                  <span>{t('usageModelRequests')}</span>
+                  <span>{t('usageModelTokens')}</span>
+                  <span>{t('usageModelCost')}</span>
+                </div>
                 {data.byModel.map((item) => (
-                  <div key={item.model} className={styles.row}>
+                  <div key={item.model} className={styles.dataRow}>
                     <span className={styles.rowName}>{item.name}</span>
-                    <span className={styles.rowValue}>
-                      {formatNumber(item.tokens)} {t('usageMetricTokens')}
-                    </span>
-                    <span className={styles.rowValue}>{formatMoney(item.cost)}</span>
+                    <span>{formatNumber(item.replies)}</span>
+                    <span>{formatNumber(item.tokens)}</span>
+                    <span>{formatMoney(item.cost)}</span>
                   </div>
                 ))}
               </div>
@@ -531,24 +913,33 @@ export const UsagePanel = () => {
                 <div className={styles.hint}>{t('usageSessionHint')}</div>
               </div>
             ) : (
-              <div className={styles.rows}>
+              <div className={styles.sessionTable}>
+                <div className={styles.sessionHead}>
+                  <span>{t('usageRecordsSession')}</span>
+                  <span>{t('usageModelTokens')}</span>
+                  <span>{t('usageModelCost')}</span>
+                  <span>{t('usageModelRequests')}</span>
+                  <span />
+                </div>
                 {data.bySession.map((item) => (
-                  <div key={item.id} className={styles.row}>
+                  <div key={item.id} className={styles.sessionRow}>
                     <span className={styles.rowName} title={item.title || undefined}>
                       {item.title || t('untitledChat')}
                     </span>
-                    <span className={styles.rowValue}>
-                      {formatNumber(item.tokens)} {t('usageMetricTokens')}
-                    </span>
+                    <span>{formatNumber(item.tokens)}</span>
+                    <span>{formatMoney(item.cost)}</span>
+                    <span>{formatNumber(item.replies)}</span>
                     <button
                       type="button"
                       className={styles.linkButton}
+                      disabled={item.deleted}
+                      title={item.deleted ? t('usageSessionDeleted') : undefined}
                       onClick={() => {
                         selectSession(item.id)
                         closeSettings()
                       }}
                     >
-                      {t('usageOpen')}
+                      {item.deleted ? t('usageSessionDeleted') : t('usageOpen')}
                     </button>
                   </div>
                 ))}
@@ -569,21 +960,10 @@ export const UsagePanel = () => {
             <div className={styles.hint}>{t('usageExtrasHint')}</div>
           </section>
 
-          <section className={styles.section}>
-            <h4 className={styles.sectionTitle}>{t('usageContextTitle')}</h4>
-            <div className={styles.emptyBox}>
-              <div>{t('usageContextEmpty')}</div>
-              <div className={styles.hint}>{t('usageContextHint')}</div>
-            </div>
-          </section>
-
-          <UsageBilling freeServerTools={freeServerTools} />
-
-          <UsageContextManage
-            context={data.context}
-            data={data}
-            onReload={() => setReload((n) => n + 1)}
-          />
+          <ContextBreakdownSection items={data.contextBreakdown} />
+          <DailyQuota data={data} />
+          <UsageBilling data={data} freeServerTools={freeServerTools} />
+          <UsageContextManage data={data} onReload={() => setReload((n) => n + 1)} />
         </>
       )}
     </div>

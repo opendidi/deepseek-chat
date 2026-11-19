@@ -5,7 +5,25 @@ import { useIsMobile } from '../../app/viewport.js'
 import { IconButton } from '../base/IconButton.js'
 import { useApiKeyForm } from './useApiKeyForm.js'
 import { useTranslate } from '../../i18n/index.js'
+import { maskApiKey } from '../../utils/maskApiKey.js'
+import { openApiKeySettings } from './settingsDialogState.js'
 import styles from './Settings.module.scss'
+
+/** 设置页之外的界面复用同一份掩码，并可提供「在设置中修改」跳转 */
+export const ApiKeyMask = ({ showChange = false }: { showChange?: boolean }) => {
+  const t = useTranslate()
+  const apiKey = useSettings((state) => state.apiKey)
+  return (
+    <span className={styles.apiKeySaved}>
+      <span className={styles.apiKeyMask}>{maskApiKey(apiKey)}</span>
+      {showChange ? (
+        <button type="button" className={styles.confirm} onClick={openApiKeySettings}>
+          {t('apiKeyChangeInSettings')}
+        </button>
+      ) : null}
+    </span>
+  )
+}
 
 /** API Key 的编辑状态：输入框与移动端底部的「确定」按钮共用 */
 export const useApiKeyEditor = () => {
@@ -29,8 +47,8 @@ export const ApiKeyField = ({ editor }: { editor: ApiKeyEditor }) => {
         <div className={styles.label}>{t('apiKeyStart')}</div>
         {apiKey && !editing ? (
           <div className={styles.apiKeySaved}>
-            {/* 固定长度掩码，避免从星号数量反推出 Key 长度 */}
-            <span className={styles.apiKeyMask}>{'*'.repeat(12)}</span>
+            {/* 统一掩码 sk-**** + 末四位，星号数量固定不泄露 Key 长度 */}
+            <span className={styles.apiKeyMask}>{maskApiKey(apiKey)}</span>
             <IconButton
               tone="primary"
               icon={<IconEditOutline16 />}

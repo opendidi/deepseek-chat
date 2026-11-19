@@ -45,6 +45,7 @@ import { PromptMenu } from './PromptMenu.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { EmojiButton } from './EmojiButton.js'
+import { SessionStatsButton } from './SessionStats.js'
 import { Spectrum } from './Spectrum.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ChatInput.module.scss'
@@ -426,6 +427,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           <ModelPicker chatModel={chatModel} onPick={setChatModel} />
         </div>
         <div className={styles.right}>
+          <SessionStatsButton disabled={importingHistory} />
           <IconButton
             icon={<IconNotebookOutline16 />}
             tooltip={t('promptLibrary')}

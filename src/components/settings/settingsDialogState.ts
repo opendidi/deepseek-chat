@@ -15,6 +15,9 @@ export const openSettings = (section: SettingsSection) =>
 
 export const closeSettings = () => useSettingsDialog.setState({ open: false })
 
+/** 供设置页之外的界面跳转到「设置 → 数据管理」修改 API Key */
+export const openApiKeySettings = () => openSettings('data')
+
 /** 没有 API Key 时打开设置并选中 API Key 所在的「数据管理」，返回是否已有 Key */
 export const ensureApiKey = () => {
   if (useSettings.getState().apiKey) {

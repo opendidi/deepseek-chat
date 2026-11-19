@@ -6,16 +6,30 @@ declare const styles: {
   readonly barColumn: string
   readonly barColumnActive: string
   readonly barEmpty: string
+  readonly barPair: string
+  readonly barSecondary: string
   readonly bars: string
   readonly billingBox: string
   readonly calendarHeader: string
+  readonly categoryBar: string
+  readonly categoryDot: string
+  readonly categoryLabel: string
+  readonly categoryList: string
+  readonly categoryMuted: string
+  readonly categoryRow: string
+  readonly categoryShare: string
+  readonly categoryValue: string
   readonly chartCard: string
   readonly chartDivider: string
   readonly chartMeta: string
   readonly chartMetaDate: string
   readonly chartMetaText: string
+  readonly compositionBox: string
   readonly contextGrid: string
   readonly contextItem: string
+  readonly dataHead: string
+  readonly dataRow: string
+  readonly dataTable: string
   readonly empty: string
   readonly emptyBox: string
   readonly estimated: string
@@ -34,6 +48,24 @@ declare const styles: {
   readonly heatHeadStat: string
   readonly heatmap: string
   readonly hint: string
+  readonly hourAxis: string
+  readonly hourAxisSpacer: string
+  readonly hourBar: string
+  readonly hourBarActive: string
+  readonly hourBarPeak: string
+  readonly hourBars: string
+  readonly hourCard: string
+  readonly hourColumn: string
+  readonly hourColumnActive: string
+  readonly hourGrid: string
+  readonly hourGridLine: string
+  readonly hourLabelRow: string
+  readonly hourLabels: string
+  readonly hourMeta: string
+  readonly hourMetaMax: string
+  readonly hourMetaPeak: string
+  readonly hourPlot: string
+  readonly hourPlotMain: string
   readonly inlineError: string
   readonly kpi: string
   readonly kpiGrid: string
@@ -50,9 +82,19 @@ declare const styles: {
   readonly panel: string
   readonly plot: string
   readonly plotMain: string
+  readonly priceHead: string
   readonly priceRow: string
+  readonly priceRow4: string
   readonly priceTable: string
+  readonly priceTable4: string
+  readonly priceUnit: string
   readonly progress: string
+  readonly quotaInput: string
+  readonly quotaRow: string
+  readonly recordHead: string
+  readonly recordName: string
+  readonly recordRow: string
+  readonly recordTable: string
   readonly row: string
   readonly rowName: string
   readonly rowValue: string
@@ -63,13 +105,18 @@ declare const styles: {
   readonly segment: string
   readonly segmentActive: string
   readonly segments: string
+  readonly sessionHead: string
+  readonly sessionRow: string
+  readonly sessionTable: string
   readonly subLabel: string
   readonly title: string
   readonly tooltip: string
   readonly tooltipDate: string
+  readonly tooltipDivider: string
   readonly tooltipLeft: string
   readonly tooltipRow: string
   readonly tooltipRowActive: string
+  readonly tooltipTag: string
   readonly xAxis: string
   readonly xAxisSpacer: string
   readonly xLabel: string

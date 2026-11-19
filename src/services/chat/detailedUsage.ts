@@ -1,47 +1,142 @@
+/**
+ * 统计页与输入栏统计弹窗共用的聚合层：扫描本地会话消息得到准确用量，
+ * 再合并本机账本里的语音附加用量与「会话已删除」的历史记录。
+ * 账本只记聚合数字，不参与 token 明细的双算。
+ */
 import { formatDate } from '../../utils/format.js'
+import { heatWindowDates, percent } from '../../utils/usageChart.js'
 import { BUILTIN_MODELS, modelDisplayName } from '../models.js'
+import { useSettings } from '../settings.js'
 import { readActiveSessionId } from './activeSession.js'
 import * as db from './db.js'
+import { BASE_SYSTEM_PROMPT, toolDefinitionText } from './requestShape.js'
 import type { Message } from './types.js'
-import { ledgerInRange, readLedger } from './usageLedger.js'
+import {
+  ledgerInRange,
+  ledgerSessions,
+  readHiddenRecords,
+  readLedger,
+  readTodayUsage,
+  type TodayUsage,
+  type UsageLedger,
+} from './usageLedger.js'
+import {
+  CONTEXT_COMPRESS_RATIO,
+  CONTEXT_WINDOW,
+  OUTPUT_RESERVE,
+  estimateRequestCost,
+  estimateTokens,
+  mediaCost,
+  modelPrices,
+  type TokenPrices,
+} from './usagePricing.js'
 import { RANGE_DAYS, usageDates, type UsageRange } from './usageRange.js'
 
-/** 附加用量单价（¥）；服务端搜索免费开关关闭时按旧规则计费 */
-export const EXTRA_PRICES = {
-  legacySearch: 0.005, // 5 元 / 1000 次
-  pageFetch: 0.0015, // 元 / 页
-  ttsChar: 0.0003, // 元 / 字符
-  asrSecond: 0.00021666666666666668, // 元 / 秒
-} as const
-
 const DAY = 86_400_000
-const CONTEXT_WINDOW = 1_000_000
-const OUTPUT_RESERVE = 8_200
 
-const pricesOf = (model: string | null): [number, number, number] => {
-  const found = BUILTIN_MODELS.find((item) => item.id === model) ?? BUILTIN_MODELS[0]
-  return (found.prices ?? BUILTIN_MODELS[0].prices ?? ['0.02', '1.00', '4.00']).map(Number) as [
-    number,
-    number,
-    number,
-  ]
+export type CompositionKey =
+  | 'usageCompositionMiss'
+  | 'usageCompositionHit'
+  | 'usageCompositionWrite'
+  | 'usageCompositionOutput'
+
+export type ContextCategoryKey =
+  | 'usageContextCategorySystem'
+  | 'usageContextCategoryTools'
+  | 'usageContextCategoryUser'
+  | 'usageContextCategoryReply'
+  | 'usageContextCategoryThinking'
+  | 'usageContextCategoryToolCall'
+  | 'usageContextCategoryToolResult'
+  | 'usageContextCategoryAttachment'
+
+export type UsageTotals = {
+  cost: number
+  tokens: number
+  input: number
+  cacheWrite: number
+  cacheRead: number
+  output: number
+  cacheHitRate: number
+  replies: number
+  modelCalls: number
+  activeDays: number
+  sessions: number
+  webSearch: number
+  pageFetch: number
+  ttsChars: number
+  asrSeconds: number
 }
 
-/** 官方定价页口径：工作日 9:00–12:00、14:00–18:00 为高峰，费用翻倍 */
-const peakFactor = (time: number): number => {
-  const date = new Date(time)
-  const weekday = date.getDay()
-  if (weekday === 0 || weekday === 6) {
-    return 1
-  }
-  const hour = date.getHours() + date.getMinutes() / 60
-  return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18) ? 2 : 1
+export type DailyUsage = {
+  date: string
+  cost: number
+  tokens: number
+  replies: number
+  input: number
+  cacheWrite: number
+  cacheRead: number
+  output: number
 }
 
-/** 中英文按不同字符权重粗估 token，仅用于上下文占用展示 */
-const estimateTokens = (text: string): number => {
-  const cjk = (text.match(/[\u4e00-\u9fff]/g) ?? []).length
-  return Math.round(cjk + (text.length - cjk) / 4)
+export type ShareItem = { key: CompositionKey | ContextCategoryKey; tokens: number; share: number }
+export type ModelUsage = { model: string; name: string; tokens: number; cost: number; replies: number }
+export type SessionUsage = {
+  id: string
+  title: string
+  tokens: number
+  cost: number
+  replies: number
+  lastAt: number
+  /** 会话已删除，排行榜里的「打开」按钮需要置灰 */
+  deleted: boolean
+}
+export type ContextRecord = {
+  id: string
+  title: string
+  tokens: number
+  percent: number
+  lastAt: number
+  exists: boolean
+}
+export type ContextInfo = {
+  current: number
+  total: number
+  tracked: number
+  window: number
+  reserve: number
+  compressAt: number
+  remaining: number
+}
+export type CurrentSessionUsage = {
+  outputs: number[]
+  last7: { date: string; tokens: number }[]
+  composition: ShareItem[]
+  webSearch: number
+  pageFetch: number
+  files: number
+  context: number
+}
+
+export type DetailedUsage = {
+  range: UsageRange
+  generatedAt: number
+  totals: UsageTotals
+  daily: DailyUsage[]
+  hourly: number[]
+  composition: ShareItem[]
+  contextBreakdown: ShareItem[]
+  byModel: ModelUsage[]
+  bySession: SessionUsage[]
+  /** 固定最近 8 周，不受统计范围影响 */
+  heatmap: { date: string; tokens: number; cost: number; replies: number }[]
+  billing: { model: string; name: string; prices: TokenPrices }[]
+  context: ContextInfo
+  contextRecords: ContextRecord[]
+  currentSession: CurrentSessionUsage
+  /** 独立于 400 天账本的今日聚合 */
+  today: TodayUsage
+  ledger: UsageLedger
 }
 
 const messageText = (message: Message): string => {
@@ -59,46 +154,98 @@ const messageText = (message: Message): string => {
     .join('')
 }
 
-export type UsageTotals = {
-  cost: number
-  replies: number
-  sessions: number
-  inputTokens: number
-  outputTokens: number
-  cachedTokens: number
-  modelCalls: number
-  webSearch: number
-  pageFetch: number
-  ttsChars: number
-  asrSeconds: number
+const jsonText = (value: unknown): string => {
+  try {
+    return JSON.stringify(value) ?? ''
+  } catch {
+    return ''
+  }
 }
 
-export type DailyUsage = { date: string; cost: number; tokens: number; replies: number }
-export type ModelUsage = { model: string; name: string; tokens: number; cost: number; replies: number }
-export type SessionUsage = { id: string; title: string; tokens: number; cost: number; replies: number }
-
-export type DetailedUsage = {
-  range: UsageRange
-  generatedAt: number
-  totals: UsageTotals
-  daily: DailyUsage[]
-  byModel: ModelUsage[]
-  bySession: SessionUsage[]
-  context: { current: number; total: number; tracked: number; window: number; reserve: number }
+const shareItems = (
+  entries: readonly { key: ShareItem['key']; tokens: number }[]
+): ShareItem[] => {
+  const total = entries.reduce((sum, item) => sum + item.tokens, 0)
+  return entries.map((item) => ({ ...item, share: percent(item.tokens, total) }))
 }
 
-const emptyTotals = (): UsageTotals => ({
+/** 当前会话最近一轮请求的上下文分类：按字符权重估算，仅用于展示 */
+const contextCategories = (
+  messages: readonly Message[],
+  search: boolean,
+  agentTools: boolean,
+  systemPrompt: string
+): ShareItem[] => {
+  const lastAssistantIndex = messages.findLastIndex((item) => item.role === 'assistant')
+  const assistant = lastAssistantIndex >= 0 ? messages[lastAssistantIndex] : undefined
+  const userIndex = messages
+    .slice(0, Math.max(0, lastAssistantIndex))
+    .findLastIndex((item) => item.role === 'user')
+  const user = userIndex >= 0 ? messages[userIndex] : undefined
+  const blocks = assistant?.role === 'assistant' ? assistant.blocks : []
+  const steps = assistant?.role === 'assistant' ? (assistant.toolSteps ?? []) : []
+
+  const textOf = (type: 'text' | 'thinking') =>
+    blocks
+      .map((block) => {
+        if (type === 'text') {
+          return block.type === 'text' ? block.text : ''
+        }
+        return block.type === 'thinking' ? block.thinking : ''
+      })
+      .join('')
+
+  const toolCalls = blocks.filter((block) => block.type === 'server_tool_use')
+  const toolResults = blocks.filter(
+    (block) =>
+      block.type === 'web_search_tool_result' || block.type === 'web_fetch_tool_result'
+  )
+
+  const entries: { key: ContextCategoryKey; tokens: number }[] = [
+    {
+      key: 'usageContextCategorySystem',
+      tokens: estimateTokens(
+        [BASE_SYSTEM_PROMPT, systemPrompt, assistant?.role === 'assistant' ? assistant.latestReminder : '']
+          .filter(Boolean)
+          .join('\n\n')
+      ),
+    },
+    { key: 'usageContextCategoryTools', tokens: estimateTokens(toolDefinitionText(search, agentTools)) },
+    { key: 'usageContextCategoryUser', tokens: estimateTokens(user?.role === 'user' ? user.content : '') },
+    { key: 'usageContextCategoryReply', tokens: estimateTokens(textOf('text')) },
+    { key: 'usageContextCategoryThinking', tokens: estimateTokens(textOf('thinking')) },
+    {
+      key: 'usageContextCategoryToolCall',
+      tokens: estimateTokens(
+        [...toolCalls.map(jsonText), ...steps.map((step) => step.inputJson)].join('\n')
+      ),
+    },
+    {
+      key: 'usageContextCategoryToolResult',
+      tokens: estimateTokens(
+        [...toolResults.map(jsonText), ...steps.map((step) => step.result ?? '')].join('\n')
+      ),
+    },
+    {
+      key: 'usageContextCategoryAttachment',
+      tokens:
+        user?.role === 'user'
+          ? estimateTokens(user.files.map((file) => `${file.name} ${file.size}`).join('\n'))
+          : 0,
+    },
+  ]
+  return shareItems(entries)
+}
+
+const emptyDaily = (date: string): DailyUsage => ({
+  date,
   cost: 0,
+  tokens: 0,
   replies: 0,
-  sessions: 0,
-  inputTokens: 0,
-  outputTokens: 0,
-  cachedTokens: 0,
-  modelCalls: 0,
-  webSearch: 0,
-  pageFetch: 0,
-  ttsChars: 0,
-  asrSeconds: 0,
+  input: 0,
+  cacheWrite: 0,
+  cacheRead: 0,
+  output: 0,
 })
 
 /** 扫描本地会话聚合成统计页所需的全部指标；只在打开/切换范围时调用 */
@@ -113,18 +260,50 @@ export const collectDetailedUsage = async (
   const start = today.getTime() - (RANGE_DAYS[range] - 1) * DAY
   const allowed = new Set(dates)
 
-  const totals = emptyTotals()
-  const dailyMap = new Map<string, DailyUsage>(
-    dates.map((date) => [date, { date, cost: 0, tokens: 0, replies: 0 }])
+  const last7Dates = usageDates('7d', now)
+  const last7Map = new Map<string, number>(last7Dates.map((date) => [date, 0]))
+  const heatDates = heatWindowDates(now)
+  const heatSet = new Set(heatDates)
+  const heatMap = new Map<string, { date: string; tokens: number; cost: number; replies: number }>(
+    heatDates.map((date) => [date, { date, tokens: 0, cost: 0, replies: 0 }])
   )
+
+  const totals: UsageTotals = {
+    cost: 0,
+    tokens: 0,
+    input: 0,
+    cacheWrite: 0,
+    cacheRead: 0,
+    output: 0,
+    cacheHitRate: 0,
+    replies: 0,
+    modelCalls: 0,
+    activeDays: 0,
+    sessions: 0,
+    webSearch: 0,
+    pageFetch: 0,
+    ttsChars: 0,
+    asrSeconds: 0,
+  }
+  const dailyMap = new Map<string, DailyUsage>(dates.map((date) => [date, emptyDaily(date)]))
   const modelMap = new Map<string, ModelUsage>()
   const sessionMap = new Map<string, SessionUsage>()
+  const contextRecords = new Map<string, ContextRecord>()
+  const hourly = Array<number>(24).fill(0)
   const activeId = readActiveSessionId()
+  const settings = useSettings.getState()
+  const currentOutputs: number[] = []
+  const currentComposition = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 }
+  let currentWebSearch = 0
+  let currentPageFetch = 0
+  const currentFiles = new Set<string>()
   let currentContext = 0
   let totalContext = 0
   let trackedSessions = 0
+  let activeMessages: readonly Message[] = []
 
   const summaries = await db.loadSessionSummaries()
+  const hiddenRecords = readHiddenRecords()
   for (const summary of summaries) {
     const session = await db.loadSession(summary.id)
     if (!session) {
@@ -134,53 +313,103 @@ export const collectDetailedUsage = async (
     let sessionContext = 0
     for (const message of session.messages) {
       sessionContext += estimateTokens(messageText(message))
+      if (summary.id === activeId && message.role === 'user') {
+        for (const file of message.files) {
+          currentFiles.add(file.id)
+        }
+      }
     }
     totalContext += sessionContext
     if (summary.id === activeId) {
       currentContext = sessionContext
+      activeMessages = session.messages
+    }
+    const lastAt =
+      [...session.messages].reverse().find((item) => item.role === 'assistant')?.createdAt ??
+      summary.updatedAt
+    if (!hiddenRecords.has(summary.id)) {
+      contextRecords.set(summary.id, {
+        id: summary.id,
+        title: summary.title,
+        tokens: sessionContext,
+        percent: percent(sessionContext, CONTEXT_WINDOW),
+        lastAt,
+        exists: true,
+      })
     }
 
     for (const message of session.messages) {
-      if (message.role !== 'assistant' || message.createdAt < start) {
+      if (message.role !== 'assistant') {
         continue
       }
       const usage = message.usage
-      const input = usage
-        ? usage.input_tokens + usage.cache_creation_input_tokens
-        : 0
-      const cached = usage?.cache_read_input_tokens ?? 0
+      const input = usage?.input_tokens ?? 0
+      const cacheWrite = usage?.cache_creation_input_tokens ?? 0
+      const cacheRead = usage?.cache_read_input_tokens ?? 0
       const output = usage?.output_tokens ?? 0
-      const tokens = input + cached + output
-      const [hitPrice, inputPrice, outputPrice] = pricesOf(message.model)
-      const tokenCost =
-        ((cached * hitPrice + input * inputPrice + output * outputPrice) / 1_000_000) *
-        peakFactor(message.createdAt)
+      const tokens = input + cacheWrite + cacheRead + output
       const webSearch = usage?.server_tool_use?.web_search_requests ?? 0
       const pageFetch = message.blocks.filter(
         (block) =>
           block.type === 'web_fetch_tool_result' && block.content.type === 'web_fetch_result'
       ).length
-      const extraCost = freeServerTools
-        ? 0
-        : webSearch * EXTRA_PRICES.legacySearch + pageFetch * EXTRA_PRICES.pageFetch
-      const cost = tokenCost + extraCost
+      const cost = estimateRequestCost({
+        model: message.model,
+        at: message.createdAt,
+        parts: { input, cacheWrite, cacheRead, output, webSearch, pageFetch },
+        freeServerTools,
+      })
+      const dateKey = formatDate(message.createdAt)
 
+      // 热力图覆盖固定 8 周，与上面的统计范围解耦
+      if (dateKey && heatSet.has(dateKey)) {
+        const heatDay = heatMap.get(dateKey)
+        if (heatDay) {
+          heatDay.tokens += tokens
+          heatDay.cost += cost
+          heatDay.replies += 1
+        }
+      }
+      if (dateKey && last7Map.has(dateKey)) {
+        last7Map.set(dateKey, (last7Map.get(dateKey) ?? 0) + tokens)
+      }
+      if (summary.id === activeId) {
+        if (usage) {
+          currentOutputs.push(output)
+        }
+        currentComposition.input += input
+        currentComposition.cacheWrite += cacheWrite
+        currentComposition.cacheRead += cacheRead
+        currentComposition.output += output
+        currentWebSearch += webSearch
+        currentPageFetch += pageFetch
+      }
+
+      if (message.createdAt < start) {
+        continue
+      }
       totals.cost += cost
       totals.replies += 1
       totals.modelCalls += 1
-      totals.inputTokens += input
-      totals.cachedTokens += cached
-      totals.outputTokens += output
+      totals.input += input
+      totals.cacheWrite += cacheWrite
+      totals.cacheRead += cacheRead
+      totals.output += output
+      totals.tokens += tokens
       totals.webSearch += webSearch
       totals.pageFetch += pageFetch
+      hourly[new Date(message.createdAt).getHours()] += 1
 
-      const dateKey = formatDate(message.createdAt)
       if (dateKey && allowed.has(dateKey)) {
         const day = dailyMap.get(dateKey)
         if (day) {
           day.cost += cost
           day.tokens += tokens
           day.replies += 1
+          day.input += input
+          day.cacheWrite += cacheWrite
+          day.cacheRead += cacheRead
+          day.output += output
         }
       }
 
@@ -203,34 +432,102 @@ export const collectDetailedUsage = async (
         tokens: 0,
         cost: 0,
         replies: 0,
+        lastAt,
+        deleted: false,
       }
       item.tokens += tokens
       item.cost += cost
       item.replies += 1
+      item.lastAt = Math.max(item.lastAt, message.createdAt)
       sessionMap.set(summary.id, item)
     }
   }
 
-  const media = ledgerInRange(readLedger(), dates)
-  totals.ttsChars = media.ttsChars
-  totals.asrSeconds = media.asrSeconds
-  totals.cost +=
-    media.ttsChars * EXTRA_PRICES.ttsChar + media.asrSeconds * EXTRA_PRICES.asrSecond
+  const ledger = readLedger()
+  const extra = ledgerInRange(ledger, dates)
+  totals.ttsChars = extra.ttsChars
+  totals.asrSeconds = extra.asrSeconds
+  totals.cost += mediaCost(totals.ttsChars, totals.asrSeconds)
+  totals.activeDays = [...dailyMap.values()].filter((day) => day.replies > 0).length
+  totals.cacheHitRate = percent(totals.cacheRead, totals.cacheRead + totals.input + totals.cacheWrite)
+
+  // 账本里的会话记录即使在会话删除后仍保留，用于排行置灰与上下文记录表格
+  const existingIds = new Set(summaries.map((item) => item.id))
+  for (const record of ledgerSessions(ledger, dates)) {
+    if (sessionMap.has(record.id)) {
+      continue
+    }
+    sessionMap.set(record.id, {
+      id: record.id,
+      title: record.title,
+      tokens: record.tokens,
+      cost: record.cost,
+      replies: record.requests,
+      lastAt: record.lastAt,
+      deleted: !existingIds.has(record.id),
+    })
+    if (!hiddenRecords.has(record.id)) {
+      contextRecords.set(record.id, {
+        id: record.id,
+        title: record.title,
+        tokens: record.tokens,
+        percent: percent(record.tokens, CONTEXT_WINDOW),
+        lastAt: record.lastAt,
+        exists: existingIds.has(record.id),
+      })
+    }
+  }
   totals.sessions = sessionMap.size
+
+  const composition = shareItems([
+    { key: 'usageCompositionMiss' as const, tokens: totals.input },
+    { key: 'usageCompositionHit' as const, tokens: totals.cacheRead },
+    { key: 'usageCompositionWrite' as const, tokens: totals.cacheWrite },
+    { key: 'usageCompositionOutput' as const, tokens: totals.output },
+  ])
+  const currentShare = shareItems([
+    { key: 'usageCompositionMiss' as const, tokens: currentComposition.input },
+    { key: 'usageCompositionHit' as const, tokens: currentComposition.cacheRead },
+    { key: 'usageCompositionWrite' as const, tokens: currentComposition.cacheWrite },
+    { key: 'usageCompositionOutput' as const, tokens: currentComposition.output },
+  ])
 
   return {
     range,
     generatedAt: now,
     totals,
     daily: [...dailyMap.values()],
+    hourly,
+    composition,
+    contextBreakdown: contextCategories(activeMessages, settings.search, settings.agentTools, settings.systemPrompt),
     byModel: [...modelMap.values()].sort((a, b) => b.tokens - a.tokens),
-    bySession: [...sessionMap.values()].sort((a, b) => b.tokens - a.tokens).slice(0, 8),
+    bySession: [...sessionMap.values()].sort((a, b) => b.tokens - a.tokens).slice(0, 10),
+    heatmap: heatDates.map((date) => heatMap.get(date) ?? { date, tokens: 0, cost: 0, replies: 0 }),
+    billing: BUILTIN_MODELS.map((model) => ({
+      model: model.id,
+      name: model.name,
+      prices: modelPrices(model.id),
+    })),
     context: {
       current: currentContext,
       total: totalContext,
       tracked: trackedSessions,
       window: CONTEXT_WINDOW,
       reserve: OUTPUT_RESERVE,
+      compressAt: Math.round((CONTEXT_WINDOW - OUTPUT_RESERVE) * CONTEXT_COMPRESS_RATIO),
+      remaining: Math.max(0, CONTEXT_WINDOW - OUTPUT_RESERVE - currentContext),
     },
+    contextRecords: [...contextRecords.values()].sort((a, b) => b.lastAt - a.lastAt),
+    currentSession: {
+      outputs: currentOutputs,
+      last7: last7Dates.map((date) => ({ date, tokens: last7Map.get(date) ?? 0 })),
+      composition: currentShare,
+      webSearch: currentWebSearch,
+      pageFetch: currentPageFetch,
+      files: currentFiles.size,
+      context: currentContext,
+    },
+    today: readTodayUsage(),
+    ledger,
   }
 }

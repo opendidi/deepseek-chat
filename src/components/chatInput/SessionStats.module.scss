@@ -1,0 +1,188 @@
+.dialog {
+  width: 420px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0.01em;
+}
+
+.empty {
+  padding: 12px;
+  border-radius: 8px;
+  background-color: var(--dsw-alias-bg-skeleton);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.trendCard,
+.weekCard,
+.compositionBox,
+.pressureCard {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background-color: var(--dsw-alias-bg-skeleton);
+}
+
+.trendStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.trendStat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.trendValue {
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.trendLabel,
+.extraLabel,
+.pressureLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.weekBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 72px;
+}
+
+.weekColumn {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  min-width: 0;
+  height: 100%;
+}
+
+.weekBar {
+  width: 100%;
+  border-radius: 3px 3px 1px 1px;
+  background-color: var(--dsw-alias-brand-primary);
+}
+
+.weekLabels {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+
+  span {
+    flex: 1;
+    min-width: 0;
+    color: var(--dsw-alias-label-tertiary);
+    font-size: 10px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.compositionBox {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.extras {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.extraItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background-color: var(--dsw-alias-bg-skeleton);
+}
+
+.extraValue {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pressureCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pressureNumbers {
+  display: flex;
+  justify-content: space-between;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  strong {
+    color: var(--dsw-alias-label-primary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.go {
+  align-self: stretch;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: none;
+  color: var(--dsw-alias-brand-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+@media (max-width: 480px) {
+  .dialog {
+    width: 100%;
+    max-width: none;
+  }
+}

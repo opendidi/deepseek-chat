@@ -67,10 +67,10 @@
 .contextItem {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   box-sizing: border-box;
   min-width: 0;
-  padding: 9px 11px;
+  padding: 10px 12px;
   border-radius: 10px;
   background-color: var(--dsw-alias-bg-skeleton);
 }
@@ -78,7 +78,7 @@
 .kpiLabel {
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
-  line-height: 16px;
+  line-height: 15px;
 }
 
 .kpiValue {
@@ -91,8 +91,8 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
+  gap: 8px;
+  padding-top: 10px;
   border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
@@ -108,13 +108,14 @@
   font-size: 13px;
   font-weight: 600;
   line-height: 20px;
+  letter-spacing: 0.01em;
 }
 
 .subLabel,
 .hint {
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
-  line-height: 18px;
+  line-height: 17px;
 }
 
 /* ---- 每日消耗：带坐标轴、网格与日期刻度的柱状图 ---- */
@@ -462,7 +463,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -499,7 +500,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 10px;
 }
@@ -641,6 +642,19 @@
   line-height: 16px;
 }
 
+.tooltipTag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background-color: var(--dsw-alias-button-ghost-active-fill);
+  color: var(--dsw-alias-brand-text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  vertical-align: 1px;
+}
+
 .tooltipRow {
   display: flex;
   align-items: baseline;
@@ -661,4 +675,391 @@
   strong {
     color: var(--dsw-alias-brand-text);
   }
+}
+
+/* ---- 每日趋势双柱 ---- */
+.barPair {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+
+  .bar {
+    max-width: 13px;
+  }
+}
+
+.barSecondary:not(.barEmpty) {
+  background-color: var(--dsw-static-amber-400);
+  background-image: none;
+}
+
+.tooltipDivider {
+  height: 1px;
+  margin: 4px 0;
+  background-color: var(--dsw-alias-border-l2);
+}
+
+/* ---- 24 小时分布：与每日趋势等高（108px），带 Y 轴与网格参照 ---- */
+.hourCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background-color: var(--dsw-alias-bg-skeleton);
+}
+
+.hourMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hourMetaMax {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hourMetaPeak {
+  color: var(--dsw-alias-brand-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: right;
+}
+
+.hourPlot {
+  display: flex;
+  gap: 6px;
+}
+
+.hourAxis {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 28px;
+  padding-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 12px;
+  text-align: right;
+}
+
+.hourPlotMain {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.hourGrid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.hourGridLine {
+  height: 0;
+  border-top: 1px dashed var(--dsw-alias-border-l3);
+  opacity: 0.8;
+}
+
+.hourGridLine:last-child {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  opacity: 1;
+}
+
+.hourBars {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 108px;
+}
+
+.hourColumn {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  min-width: 0;
+  height: 100%;
+  border-radius: 3px 3px 0 0;
+}
+
+.hourColumnActive {
+  background-color: var(--dsw-alias-bg-base);
+}
+
+.hourBarActive:not(.barEmpty) {
+  filter: brightness(1.14);
+}
+
+.hourBar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 3px 3px 1px 1px;
+  background-color: var(--dsw-alias-brand-primary);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 75%);
+  transition: filter 0.15s ease;
+}
+
+.hourColumn:hover .hourBar {
+  filter: brightness(1.12);
+}
+
+.hourBar.barEmpty {
+  min-height: 2px;
+}
+
+.hourBarPeak:not(.barEmpty) {
+  background-image: none;
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-text);
+}
+
+.hourLabelRow {
+  display: flex;
+  gap: 6px;
+}
+
+.hourAxisSpacer {
+  flex: none;
+  width: 28px;
+}
+
+.hourLabels {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+
+  span {
+    flex: 1;
+    min-width: 0;
+    color: var(--dsw-alias-label-tertiary);
+    font-size: 10px;
+    line-height: 14px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---- 输入构成环 ---- */
+.compositionBox {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background-color: var(--dsw-alias-bg-skeleton);
+}
+
+/* ---- 上下文分类 ---- */
+.categoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.categoryRow {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1.3fr) minmax(0, 1fr) 58px 42px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* 零用量分类弱化，避免一长串 0 抢视觉重心 */
+.categoryMuted .categoryLabel,
+.categoryMuted .categoryValue,
+.categoryMuted .categoryShare {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.categoryMuted .categoryDot {
+  opacity: 0.45;
+}
+
+.categoryDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+}
+
+.categoryLabel {
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.categoryBar {
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background-color: var(--dsw-alias-bg-skeleton);
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+  }
+}
+
+.categoryValue,
+.categoryShare {
+  color: var(--dsw-alias-label-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.categoryShare {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 计费口径明细 ---- */
+.priceUnit {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.priceTable4 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.priceHead,
+.priceRow4 {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 11px;
+  line-height: 16px;
+
+  span:not(:first-child) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.priceHead {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.priceRow4 {
+  color: var(--dsw-alias-label-primary);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* ---- 通用数据表：模型 / 会话 / 上下文记录 ---- */
+.dataTable,
+.sessionTable,
+.recordTable {
+  display: flex;
+  flex-direction: column;
+}
+
+.dataHead,
+.dataRow,
+.sessionHead,
+.sessionRow,
+.recordHead,
+.recordRow {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  font-size: 12px;
+  line-height: 18px;
+
+  > span:not(:first-child) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.dataHead,
+.dataRow {
+  grid-template-columns: minmax(0, 2fr) 60px 90px 80px;
+}
+
+.sessionHead,
+.sessionRow {
+  grid-template-columns: minmax(0, 2fr) 80px 70px 50px 62px;
+}
+
+.recordHead,
+.recordRow {
+  grid-template-columns: minmax(0, 2fr) 80px 60px 56px 40px;
+}
+
+.dataHead,
+.sessionHead,
+.recordHead {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.dataRow,
+.sessionRow,
+.recordRow {
+  color: var(--dsw-alias-label-primary);
+}
+
+.rowName,
+.recordName {
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- 每日额度提醒 ---- */
+.quotaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 28px;
+}
+
+.quotaInput {
+  box-sizing: border-box;
+  width: 88px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background-color: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
 }
