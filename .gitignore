@@ -12,6 +12,10 @@ build/
 .env.*
 !.env.example
 tmp/
+# i18n key 审计的工作快照（keys.now / keys.old / .old-*.tmp）不进仓库
+*-keys.now
+*-keys.old
+.old-*.tmp
 
 # 存储后端
 .venv/
