@@ -113,9 +113,8 @@ export const AmapInteractiveMap = ({
 
   return (
     <div className={styles.amapMapWrap}>
-      {status !== 'unavailable' ? (
-        <div ref={containerRef} className={styles.amapInteractive} aria-hidden={status !== 'ready'} />
-      ) : null}
+      {/* 容器常驻撑起 320px 高度：unavailable 时若卸载它，绝对定位的静态图会因父级塌缩而消失 */}
+      <div ref={containerRef} className={styles.amapInteractive} aria-hidden={status !== 'ready'} />
       {status !== 'ready' ? (
         <a className={styles.amapMapOverlay} href={link} target="_blank" rel="noreferrer" title={linkTitle}>
           <img className={styles.amapMapCover} src={staticUrl} alt={linkTitle} loading="lazy" />
