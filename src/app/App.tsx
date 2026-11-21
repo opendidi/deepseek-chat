@@ -41,7 +41,6 @@ import { requestSiderSearchFocus } from '../components/sider/siderSearchState.js
 import { bindPwa } from './pwa.js'
 import { InstallPrompt } from './InstallPrompt.js'
 import { AccessGate } from './AccessGate.js'
-import { AmapKeyGate } from './AmapKeyGate.js'
 import { useOnline } from './useOnline.js'
 import styles from './App.module.scss'
 
@@ -213,7 +212,6 @@ export const App = () => {
       <SelectionMenu />
       <InstallPrompt />
       <AccessGate />
-      <AmapKeyGate />
       <Toast />
     </>
   )

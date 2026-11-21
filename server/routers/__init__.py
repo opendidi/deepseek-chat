@@ -1,6 +1,6 @@
 """API 路由聚合：app.py 逐个 include 这里的 router。"""
 
-from . import favorites, files, search, sessions, staging
+from . import amap, favorites, files, search, sessions, staging
 
 ROUTERS = (
     sessions.router,
@@ -8,4 +8,5 @@ ROUTERS = (
     favorites.router,
     staging.router,
     search.router,
+    amap.router,
 )

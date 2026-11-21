@@ -30,5 +30,7 @@ def _load_env_file(path: Path) -> None:
 
 _load_env_file(REPO_ROOT / '.env')
 
+AMAP_KEY = os.environ.get('AMAP_KEY') or ''
+
 DATA_DIR = Path(os.environ.get('DATA_DIR') or REPO_ROOT / 'data')
 DIST_DIR = Path(os.environ.get('DIST_DIR') or REPO_ROOT / 'dist')

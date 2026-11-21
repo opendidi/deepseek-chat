@@ -52,7 +52,7 @@ For server deployment (systemd / nginx + HTTPS / Docker) see [DEPLOY.md](DEPLOY.
 
 - After enabling Settings → Model → Agent tools, the model can call browser-side tools and automatically run multiple "call → execute locally → return result" turns (up to 6, stoppable at any time).
 - Built-in tools: `get_current_time`, `calculate` (no `eval`), and `get_page_context`. Tool steps and results are shown in the reply.
-- **Amap map tools**: paste an Amap "Web service" key in Settings and the agent can search places (`amap_place_search`), geocode addresses (`amap_geocode`), fetch live weather (`amap_weather`), and plan routes (`amap_route_planning`). Tools are off by default; enable them per tool.
+- **Amap map tools**: set `AMAP_KEY` (an Amap "Web service" key) in the backend `.env` and the agent can search places (`amap_place_search`), geocode addresses (`amap_geocode`), fetch live weather (`amap_weather`), and plan routes (`amap_route_planning`). The key stays on the server; tools are off by default — enable them per tool.
 - When disabled, no client tools are declared and the chat stays a single ordinary request.
 
 ### Input, reading, and interface
