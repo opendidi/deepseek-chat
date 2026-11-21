@@ -117,9 +117,7 @@ def route_planning(origin_address: str, destination_address: str, mode: str = 'd
     destination_point = (destination.get('geocodes') or [{}])[0].get('location')
     if not origin_point or not destination_point:
         return {'found': False, 'reason': '起点或目的地无法解析为坐标'}
-    path = '/v3/direction/walking' if mode == 'walking' else '/v3/direction/driving'
-    data = _amap_get(path, {'origin': origin_point, 'destination': destination_point},
-                     timeout=AMAP_TIMEOUT * 2)
+    data = _route_data(origin_point, destination_point, mode)
     route = data.get('route') or {}
     paths = route.get('paths') or []
     if not paths:
@@ -136,3 +134,36 @@ def route_planning(origin_address: str, destination_address: str, mode: str = 'd
         'duration_seconds': int(float(best.get('duration') or 0)),
         'steps': steps[:6],
     }
+
+
+def route_line_points(origin_address: str, destination_address: str, mode: str = 'driving') -> dict:
+    """路线折线：只返回最佳路径的坐标串，供交互地图绘制路线（不占工具结果，按需由地图卡片拉取）"""
+    _require_amap_key()
+    origin = _amap_get('/v3/geocode/geo', {'address': origin_address})
+    destination = _amap_get('/v3/geocode/geo', {'address': destination_address})
+    origin_point = (origin.get('geocodes') or [{}])[0].get('location')
+    destination_point = (destination.get('geocodes') or [{}])[0].get('location')
+    if not origin_point or not destination_point:
+        return {'found': False}
+    data = _route_data(origin_point, destination_point, mode)
+    paths = (data.get('route') or {}).get('paths') or []
+    if not paths:
+        return {'found': False}
+    points: list[list[float]] = []
+    for step in paths[0].get('steps') or []:
+        for pair in str(step.get('polyline') or '').split(';'):
+            lng, _, lat = pair.partition(',')
+            try:
+                point = [float(lng), float(lat)]
+            except ValueError:
+                continue
+            # 相邻步骤的接驳点重复，去重后再交给前端绘制
+            if not points or points[-1] != point:
+                points.append(point)
+    return {'found': True, 'points': points}
+
+
+def _route_data(origin_point: str, destination_point: str, mode: str) -> dict:
+    path = '/v3/direction/walking' if mode == 'walking' else '/v3/direction/driving'
+    return _amap_get(path, {'origin': origin_point, 'destination': destination_point},
+                     timeout=AMAP_TIMEOUT * 2)

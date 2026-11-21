@@ -31,6 +31,10 @@ def _load_env_file(path: Path) -> None:
 _load_env_file(REPO_ROOT / '.env')
 
 AMAP_KEY = os.environ.get('AMAP_KEY') or ''
+# 交互式地图（JS API）用的是另一种类型的 Key：控制台需单独创建「Web端(JS API)」类型。
+# 两个都未配置时前端回退到静态地图图片；只配 AMAP_JS_KEY 也行（2021-12-02 前的老 Key 无安全密钥）。
+AMAP_JS_KEY = os.environ.get('AMAP_JS_KEY') or ''
+AMAP_SECURITY_CODE = os.environ.get('AMAP_SECURITY_CODE') or ''
 
 DATA_DIR = Path(os.environ.get('DATA_DIR') or REPO_ROOT / 'data')
 DIST_DIR = Path(os.environ.get('DIST_DIR') or REPO_ROOT / 'dist')

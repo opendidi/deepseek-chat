@@ -6,7 +6,8 @@
     <meta name="theme-color" content="#ffffff" />
     <!--
     静态站没有响应头，用 meta 下发 CSP 作为 XSS 的第二层防线：
-    - script-src 只允许同源脚本，阻止注入的内联脚本与 javascript: 执行；
+    - script-src 只允许同源脚本与高德 JS API SDK（配置 AMAP_JS_KEY 后聊天卡片内嵌交互地图；
+      仅放开 webapi.amap.com 一个来源，阻止注入的内联脚本与 javascript: 执行）；
     - style-src 放行 inline 是因为 KaTeX / Mermaid 生成的 HTML 带 style 属性；
     - connect-src 允许任意 https 与本地回环地址，兼容 createConfig({ apiOrigin }) 与
       运行时在设置里自定义的接口地址（本地网关常见 http://localhost）；Chrome 不接受
@@ -15,7 +16,7 @@
   -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:; object-src 'none'; base-uri 'self'; form-action 'none'; worker-src 'self' blob:"
+      content="default-src 'self'; script-src 'self' https://webapi.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:; object-src 'none'; base-uri 'self'; form-action 'none'; worker-src 'self' blob:"
     />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" type="image/png" href="static/icons/icon-192.png" />

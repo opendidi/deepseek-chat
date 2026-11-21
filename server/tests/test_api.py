@@ -220,3 +220,65 @@ class _FakeStaticmapUpstream:
                 self.close()
 
         return _FakeResponse(b'png-fake-bytes')
+
+
+def test_jsconfig_endpoint(client, monkeypatch):
+    """交互地图配置：未配置 JS Key 404，配置后下发 key + 安全密钥（浏览器端公开凭据）"""
+    monkeypatch.setattr('server.routers.amap.AMAP_JS_KEY', '')
+    assert client.get('/api/amap/jsconfig').status_code == 404
+
+    monkeypatch.setattr('server.routers.amap.AMAP_JS_KEY', 'js-key-fake')
+    monkeypatch.setattr('server.routers.amap.AMAP_SECURITY_CODE', 'js-code-fake')
+    data = client.get('/api/amap/jsconfig').json()
+    assert data == {'key': 'js-key-fake', 'securityCode': 'js-code-fake'}
+
+
+class _FakeRouteUpstream:
+    """替身上游：地理编码返回固定坐标，方向接口返回带 polyline 的步骤"""
+
+    def __call__(self, request, timeout=None):
+        import io
+
+        url = request.full_url
+        if '/geocode/geo' in url:
+            payload = {'geocodes': [{'location': '116.32,39.89'}]}
+        elif '/direction/' in url:
+            payload = {
+                'route': {
+                    'paths': [
+                        {
+                            'steps': [
+                                {'instruction': '向东', 'polyline': '116.32,39.89;116.33,39.90'},
+                                {'instruction': '向北', 'polyline': '116.33,39.90;116.34,39.91'},
+                            ]
+                        }
+                    ]
+                }
+            }
+        else:
+            payload = {}
+        raw = json.dumps(payload).encode('utf-8')
+
+        class _FakeResponse(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.close()
+
+        return _FakeResponse(raw)
+
+
+def test_routeline_endpoint(client, monkeypatch):
+    """路线折线端点：起点终点解析 + 步骤 polyline 拼成坐标串；Key 缺失 400"""
+    monkeypatch.setattr('server.amap.AMAP_KEY', '')
+    assert client.get('/api/amap/routeline', params={'origin': '甲', 'destination': '乙'}).status_code == 400
+
+    monkeypatch.setattr('server.amap.AMAP_KEY', 'test-key')
+    monkeypatch.setattr('server.amap.urllib.request.urlopen', _FakeRouteUpstream())
+    data = client.get(
+        '/api/amap/routeline',
+        params={'origin': '北京西站', 'destination': '首都机场', 'mode': 'driving'},
+    ).json()
+    assert data['found'] is True
+    assert data['points'] == [[116.32, 39.89], [116.33, 39.9], [116.34, 39.91]]

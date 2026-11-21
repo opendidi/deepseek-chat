@@ -1,15 +1,13 @@
 import clsx from 'clsx'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import type { ToolStep } from '../../services/chat/types.js'
+import { AmapInteractiveMap } from './AmapInteractiveMap.js'
 import {
+  buildAmapCardView,
   buildMarkerLink,
-  buildRouteLink,
-  buildStaticMapUrl,
   formatDistance,
   formatDuration,
-  type AmapCardPoi,
-  type AmapRouteData,
 } from '../../utils/amapCard.js'
 import styles from './ToolSteps.module.scss'
 
@@ -83,68 +81,36 @@ export const ToolSteps = ({ steps }: { steps?: ToolStep[] }) => {  const t = use
   )
 }
 
-/** amap 工具结果的解析视图：静态地图卡片 + POI 列表 / 路线摘要 / 天气；解析失败时整体隐藏 */
+/** amap 工具结果的解析视图：交互地图（静态图兜底）+ POI 列表 / 路线摘要 / 天气；解析失败时整体隐藏 */
 const AmapResultCard = ({ name, result }: { name: string; result: string }) => {
   const t = useTranslate()
-  let data: Record<string, unknown> | null = null
-  try {
-    data = JSON.parse(result) as Record<string, unknown>
-  } catch {
+  const view = useMemo(() => {
+    let data: Record<string, unknown> | null = null
+    try {
+      data = JSON.parse(result) as Record<string, unknown>
+    } catch {
+      return null
+    }
+    return data && typeof data === 'object' ? buildAmapCardView(name, data) : null
+  }, [name, result])
+  if (!view) {
     return null
   }
-  if (!data || typeof data !== 'object') {
-    return null
-  }
-
-  const isRoute = name === 'amap_route_planning'
-  const route = isRoute ? (data as unknown as AmapRouteData) : null
-  const pois = (
-    Array.isArray(data.pois)
-      ? (data.pois as AmapCardPoi[])
-      : Array.isArray(data.geocodes)
-        ? (data.geocodes as Record<string, unknown>[]).map((geo) => ({
-            name: String(geo.formatted_address ?? ''),
-            address: '',
-            location: String(geo.location ?? ''),
-            district: '',
-          }))
-        : []
-  ).filter((poi) => poi.location)
-  const locations = isRoute
-    ? [route?.origin_point, route?.destination_point].filter((point): point is string => Boolean(point))
-    : pois.map((poi) => poi.location)
-  const mapLink =
-    isRoute && route?.origin_point && route?.destination_point
-      ? buildRouteLink(
-          route.origin_point,
-          route.destination_point,
-          route.mode === 'walking' ? 'walking' : 'driving'
-        )
-      : pois.length > 0
-        ? buildMarkerLink(pois[0].location, pois[0].name)
-        : null
-
   return (
     <div className={styles.amapCard}>
-      {locations.length > 0 ? (
-        <a
-          className={styles.amapMapLink}
-          href={mapLink ?? '#'}
-          target="_blank"
-          rel="noreferrer"
-          title={t('amapCardOpenInAmap')}
-        >
-          <img
-            className={styles.amapMapImage}
-            src={buildStaticMapUrl(locations, isRoute ? 11 : 13)}
-            alt={t('amapCardOpenInAmap')}
-            loading="lazy"
-          />
-        </a>
+      {view.locations.length > 0 ? (
+        <AmapInteractiveMap
+          locations={view.locations}
+          labels={view.labels}
+          zoom={view.route ? 11 : 13}
+          route={view.route}
+          link={view.mapLink ?? '#'}
+          linkTitle={t('amapCardOpenInAmap')}
+        />
       ) : null}
-      {pois.length > 0 ? (
+      {view.pois.length > 0 ? (
         <ul className={styles.amapPoiList}>
-          {pois.map((poi) => (
+          {view.pois.map((poi) => (
             <li key={`${poi.name}-${poi.location}`}>
               <a href={buildMarkerLink(poi.location, poi.name)} target="_blank" rel="noreferrer">
                 {poi.name}
@@ -154,21 +120,17 @@ const AmapResultCard = ({ name, result }: { name: string; result: string }) => {
           ))}
         </ul>
       ) : null}
-      {isRoute && route ? (
+      {view.routeMeta ? (
         <div className={styles.amapRouteMeta}>
           <span>
-            {t('amapCardDistance')}：{formatDistance(route.distance_meters ?? 0)}
+            {t('amapCardDistance')}：{formatDistance(view.routeMeta.distanceMeters)}
           </span>
           <span>
-            {t('amapCardDuration')}：{formatDuration(route.duration_seconds ?? 0)}
+            {t('amapCardDuration')}：{formatDuration(view.routeMeta.durationSeconds)}
           </span>
         </div>
       ) : null}
-      {name === 'amap_weather' && typeof data.weather === 'string' ? (
-        <div className={styles.amapWeather}>
-          {data.weather} {String(data.temperature ?? '')}°C · {String(data.winddirection ?? '')}
-        </div>
-      ) : null}
+      {view.weatherText ? <div className={styles.amapWeather}>{view.weatherText}</div> : null}
     </div>
   )
 }
