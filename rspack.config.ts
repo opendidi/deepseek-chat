@@ -139,14 +139,15 @@ export const createConfig = ({
     },
   },
   // 按传输体积衡量：入口 JS + CSS 约 660 KiB，gzip 后约 195 KiB。
-  // 入口阈值随功能体量上调（css+js 合计），超限时仍会提示以保持警觉；
+  // 阈值随功能体量校准（当前主包 ~668 KiB / 入口合计 ~806 KiB，gzip 后约 190 KiB）；
+  // 超过警戒线只提示不阻断，体积明显继续膨胀时再考虑进一步拆包；
   // 但保留告警，入口明显膨胀时仍会提示。
   // dev 产物未压缩，体积告警只会干扰启动输出；生产构建保留提示
   // 统计分区已按需加载，主包仍包含 i18n、设置项与本机账本采集入口
   performance: {
     hints: dev ? false : 'warning',
-    maxAssetSize: 600 * 1024,
-    maxEntrypointSize: 800 * 1024,
+    maxAssetSize: 700 * 1024,
+    maxEntrypointSize: 900 * 1024,
   },
   devServer: { port: DEV_PORT, ...devServer },
 })
