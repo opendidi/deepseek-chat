@@ -21,9 +21,9 @@ export type AmapRouteData = {
   steps?: string[]
 }
 
-/** 把多个坐标拼成静态地图 markers 参数（同一组样式，坐标间用 ; 分隔） */
+/** 把多个坐标拼成静态地图 markers 参数（高德格式：尺寸,颜色,标签:坐标1;坐标2） */
 const markersParam = (locations: readonly string[]): string =>
-  locations.filter(Boolean).map((location) => `mid,0xFF0000:${location}`).join('|')
+  locations.filter(Boolean).map((location, index) => `mid,0xFF0000,${String.fromCharCode(65 + (index % 26))}:${location}`).join('|')
 
 /** 静态地图代理 URL：<img> 直接显示，坐标取自工具返回的 JSON */
 export const buildStaticMapUrl = (locations: readonly string[], zoom = 13, size = '540*320'): string => {

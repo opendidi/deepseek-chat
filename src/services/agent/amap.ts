@@ -57,7 +57,7 @@ const createAmapTools = (): ClientTool[] => [
       },
       required: ['keywords'],
     },
-    timeoutMs: 10_000,
+    timeoutMs: 15_000,
     maxResult: 2400,
     run: async (input, signal) => {
       const keywords = requireString(input, 'keywords')
@@ -77,7 +77,7 @@ const createAmapTools = (): ClientTool[] => [
       },
       required: ['address'],
     },
-    timeoutMs: 10_000,
+    timeoutMs: 15_000,
     maxResult: 1200,
     run: async (input, signal) => {
       const address = requireString(input, 'address')
@@ -96,7 +96,7 @@ const createAmapTools = (): ClientTool[] => [
       },
       required: ['city'],
     },
-    timeoutMs: 10_000,
+    timeoutMs: 15_000,
     maxResult: 1200,
     run: async (input, signal) => {
       const city = requireString(input, 'city')

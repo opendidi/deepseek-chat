@@ -14,13 +14,13 @@ test('静态地图 URL：markers 组装 + zoom/size', () => {
   const params = new URL(url, 'http://x').searchParams
   assert.equal(params.get('zoom'), '11')
   assert.equal(params.get('size'), '540*320')
-  assert.equal(params.get('markers'), 'mid,0xFF0000:116.397,39.918|mid,0xFF0000:116.40,39.90')
+  assert.equal(params.get('markers'), 'mid,0xFF0000,A:116.397,39.918|mid,0xFF0000,B:116.40,39.90')
 })
 
 test('静态地图 URL：跳过空坐标', () => {
   const url = buildStaticMapUrl(['', '116.40,39.90'])
   const markers = new URL(url, 'http://x').searchParams.get('markers')
-  assert.equal(markers, 'mid,0xFF0000:116.40,39.90')
+  assert.equal(markers, 'mid,0xFF0000,A:116.40,39.90')
 })
 
 test('地点跳转链接：position + name + src', () => {

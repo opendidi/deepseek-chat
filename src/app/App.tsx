@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { useTranslate } from '../i18n/index.js'
-import { setSiderCollapsed, useSettings } from '../services/settings.js'
+import { syncAmapToolAvailability, setSiderCollapsed, useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
   bindChatPersistence,
@@ -91,6 +91,15 @@ export const App = () => {
   useEffect(bindChatPersistence, [])
   // 地址栏 hash 与 activeId 双向同步（从 sessionLifecycle 的模块级副作用显式化）
   useEffect(bindHashSync, [])
+  // 服务器配置了高德 Key 时自动启用地图工具（按启动时健康检查同步一次）
+  useEffect(() => {
+    void fetch('/api/health')
+      .then((response) => response.json() as Promise<{ amap?: boolean }>)
+      .then((data) => {
+        syncAmapToolAvailability(data.amap === true)
+      })
+      .catch(() => {})
+  }, [])
 
   // 全局快捷键：Ctrl/Cmd+K 搜索会话、Ctrl/Cmd+Shift+O 新建对话、Ctrl/Cmd+, 打开设置
   useEffect(() => {

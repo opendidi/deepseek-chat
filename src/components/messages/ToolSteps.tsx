@@ -98,9 +98,18 @@ const AmapResultCard = ({ name, result }: { name: string; result: string }) => {
 
   const isRoute = name === 'amap_route_planning'
   const route = isRoute ? (data as unknown as AmapRouteData) : null
-  const pois = Array.isArray(data.pois)
-    ? (data.pois as AmapCardPoi[]).filter((poi) => poi.location)
-    : []
+  const pois = (
+    Array.isArray(data.pois)
+      ? (data.pois as AmapCardPoi[])
+      : Array.isArray(data.geocodes)
+        ? (data.geocodes as Record<string, unknown>[]).map((geo) => ({
+            name: String(geo.formatted_address ?? ''),
+            address: '',
+            location: String(geo.location ?? ''),
+            district: '',
+          }))
+        : []
+  ).filter((poi) => poi.location)
   const locations = isRoute
     ? [route?.origin_point, route?.destination_point].filter((point): point is string => Boolean(point))
     : pois.map((poi) => poi.location)
