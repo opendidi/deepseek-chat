@@ -48,7 +48,7 @@ const createAmapTools = (): ClientTool[] => [
   {
     name: 'amap_place_search',
     category: 'map',
-    description: '高德地图 POI 搜索：按关键词查找地点（餐饮、加油站、景点等），返回名称、地址与坐标。回答「某地在哪」「找附近的 X」等位置类问题时应优先调用本工具；查询结果会自动以静态地图卡片展示给用户，无需描述如何查看地图。',
+    description: '高德地图 POI 搜索：按关键词查找地点（餐饮、加油站、景点等），返回名称、地址与坐标。回答「某地在哪」「找附近的 X」等位置类问题时应优先调用本工具；结果会以可点击的地点链接展示。',
     input_schema: {
       type: 'object',
       properties: {
@@ -68,7 +68,7 @@ const createAmapTools = (): ClientTool[] => [
   {
     name: 'amap_geocode',
     category: 'map',
-    description: '高德地理编码：把结构化地址转换为经纬度坐标与区划代码。用户询问某地的准确坐标，或需要坐标做后续查询时使用；结果会自动以地图卡片展示。',
+    description: '高德地理编码：把结构化地址转换为经纬度坐标与区划代码。用户询问某地的准确坐标，或需要坐标做后续查询时使用；结果会以可点击的地点链接展示。',
     input_schema: {
       type: 'object',
       properties: {
@@ -107,7 +107,7 @@ const createAmapTools = (): ClientTool[] => [
   {
     name: 'amap_route_planning',
     category: 'map',
-    description: '高德路线规划：查询两地之间的驾车或步行路线，返回距离与耗时摘要。地址用中文名；路线与起终点会自动以地图卡片展示。',
+    description: '高德路线规划：查询两地之间的驾车或步行路线，返回距离与耗时摘要。地址用中文名；结果会以距离耗时摘要与高德导航链接展示。',
     input_schema: {
       type: 'object',
       properties: {

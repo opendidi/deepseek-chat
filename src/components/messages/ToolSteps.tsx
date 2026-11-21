@@ -2,13 +2,7 @@ import clsx from 'clsx'
 import { useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import type { ToolStep } from '../../services/chat/types.js'
-import { AmapInteractiveMap } from './AmapInteractiveMap.js'
-import {
-  buildAmapCardView,
-  buildMarkerLink,
-  formatDistance,
-  formatDuration,
-} from '../../utils/amapCard.js'
+import { buildAmapCardView, buildMarkerLink, formatDistance, formatDuration } from '../../utils/amapCard.js'
 import styles from './ToolSteps.module.scss'
 
 /** 客户端工具调用步骤：默认给出状态、耗时与结果摘要，展开后显示完整入参与结果 */
@@ -81,7 +75,7 @@ export const ToolSteps = ({ steps }: { steps?: ToolStep[] }) => {  const t = use
   )
 }
 
-/** amap 工具结果的解析视图：交互地图（静态图兜底）+ POI 列表 / 路线摘要 / 天气；解析失败时整体隐藏 */
+/** amap 工具结果的解析视图：地址跳转链接 + 路线摘要 / 天气；解析失败时整体隐藏 */
 const AmapResultCard = ({ name, result }: { name: string; result: string }) => {
   const t = useTranslate()
   const view = useMemo(() => {
@@ -98,16 +92,6 @@ const AmapResultCard = ({ name, result }: { name: string; result: string }) => {
   }
   return (
     <div className={styles.amapCard}>
-      {view.locations.length > 0 ? (
-        <AmapInteractiveMap
-          locations={view.locations}
-          labels={view.labels}
-          zoom={view.route ? 11 : 13}
-          route={view.route}
-          link={view.mapLink ?? '#'}
-          linkTitle={t('amapCardOpenInAmap')}
-        />
-      ) : null}
       {view.pois.length > 0 ? (
         <ul className={styles.amapPoiList}>
           {view.pois.map((poi) => (
@@ -128,6 +112,13 @@ const AmapResultCard = ({ name, result }: { name: string; result: string }) => {
           <span>
             {t('amapCardDuration')}：{formatDuration(view.routeMeta.durationSeconds)}
           </span>
+        </div>
+      ) : null}
+      {view.mapLink && view.pois.length === 0 ? (
+        <div className={styles.amapRouteLink}>
+          <a href={view.mapLink} target="_blank" rel="noreferrer">
+            {t('amapCardOpenInAmap')}
+          </a>
         </div>
       ) : null}
       {view.weatherText ? <div className={styles.amapWeather}>{view.weatherText}</div> : null}

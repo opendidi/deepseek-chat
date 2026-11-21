@@ -53,10 +53,8 @@ RestartSec=3
 Environment=DATA_DIR=/opt/deepseek-chat/data
 # 可选：访问口令（或改用 EnvironmentFile=/opt/deepseek-chat/.env）
 # Environment=ACCESS_PASSWORD=change-me
-# 可选：高德 Web 服务 Key（Agent 地图工具）；Web端(JS API) Key 与安全密钥启用交互式地图
+# 可选：高德 Web 服务 Key（Agent 地图工具）
 # Environment=AMAP_KEY=your-amap-web-service-key
-# Environment=AMAP_JS_KEY=your-amap-jsapi-key
-# Environment=AMAP_SECURITY_CODE=your-amap-jsapi-security-code
 # 公网部署强烈建议设置访问口令（前端会弹出输入门）；不设置则 /api 对能访问到服务的人完全开放
 
 [Install]

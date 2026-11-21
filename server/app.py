@@ -31,7 +31,6 @@ app = FastAPI(title='deepseek-chat', lifespan=_lifespan, docs_url=None, redoc_ur
 # 访问口令（可选）：设置 ACCESS_PASSWORD 环境变量后，除健康检查外的全部 /api 请求
 # 必须携带 x-access-key 头。用于公网部署时挡住无鉴权的数据读写；本地自用不设即完全关闭。
 NO_AUTH_PATHS = {'/api/health'}
-NO_AUTH_PREFIXES = ('/api/amap/staticmap',)
 
 
 @app.middleware('http')
@@ -41,7 +40,6 @@ async def require_access_key(request: Request, call_next):
         password
         and request.url.path.startswith('/api')
         and request.url.path not in NO_AUTH_PATHS
-        and not request.url.path.startswith(NO_AUTH_PREFIXES)
     ):
         supplied = request.headers.get('x-access-key', '')
         if not hmac.compare_digest(supplied.encode(), password.encode()):
