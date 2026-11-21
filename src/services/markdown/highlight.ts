@@ -1,4 +1,17 @@
-import Prism from 'prismjs'
+type PrismModule = typeof import('prismjs')
+
+/** Prism 核心实例：懒加载完成前为 null（首个受支持代码块触发加载） */
+let prism: PrismModule | null = null
+let prismPromise: Promise<PrismModule> | null = null
+
+/** 核心 lazy：主包不含 prismjs（约省 40KB）；语言组件依赖 window.Prism，必须等核心先就绪 */
+const loadPrism = (): Promise<PrismModule> => {
+  prismPromise ??= import('prismjs').then((module) => {
+    prism = module.default
+    return prism
+  })
+  return prismPromise
+}
 
 type Loader = () => Promise<unknown>
 
@@ -101,10 +114,16 @@ export function getHighlightLang(infostring: string): string | null {
   return Object.hasOwn(loaders, lang) ? lang : null
 }
 
-export function isHighlightLoaded(lang: string): boolean {
-  return Object.hasOwn(Prism.languages, lang)
+/** 已就绪的 Prism 核心实例；未加载完成时为 null（调用方回退为转义纯文本） */
+export function getPrism(): PrismModule | null {
+  return prism
 }
 
+export function isHighlightLoaded(lang: string): boolean {
+  return prism !== null && Object.hasOwn(prism.languages, lang)
+}
+
+/** 先加载核心再注册语言包：语言组件挂到 window.Prism 上，顺序不能反 */
 export function loadHighlight(lang: string): Promise<unknown> {
-  return loaders[lang]()
+  return loadPrism().then(() => loaders[lang]())
 }

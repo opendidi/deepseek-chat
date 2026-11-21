@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -27,6 +28,12 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(title='deepseek-chat', lifespan=_lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+
+# GZip 必须最内层（紧贴路由）：下面的 @app.middleware 都是 BaseHTTPMiddleware，会把响应
+# 变成流式分块，GZip 在外层时 minimum_size 判断拿不到完整 body，小响应也会被压缩。
+# 对 >1KB 的 JSON / js / css 响应生效（Accept-Encoding: gzip 时），
+# 677KB 的主包在远程访问下降到约 220KB。
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # 访问口令（可选）：设置 ACCESS_PASSWORD 环境变量后，除健康检查外的全部 /api 请求
 # 必须携带 x-access-key 头。用于公网部署时挡住无鉴权的数据读写；本地自用不设即完全关闭。
@@ -62,6 +69,19 @@ async def guard_cross_site(request: Request, call_next):
     if origin and urlsplit(origin).netloc != request.headers.get('host', ''):
         return JSONResponse({'detail': 'cross-origin request blocked'}, status_code=403)
     return await call_next(request)
+
+
+@app.middleware('http')
+async def static_cache_headers(request: Request, call_next):
+    """带内容 hash 的 js/css 一年不可变缓存：回访直接命中本地缓存零请求。
+    index.html 引用这些 hash 文件，必须每次协商（no-cache）以免更新后拿旧引用。"""
+    response = await call_next(request)
+    path = request.url.path
+    if request.method == 'GET' and (path.startswith('/static/js/') or path.startswith('/static/css/')):
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    elif path in ('/', '/index.html'):
+        response.headers.setdefault('Cache-Control', 'no-cache')
+    return response
 
 
 @app.get('/api/health')

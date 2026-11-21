@@ -173,3 +173,22 @@ def test_access_key_gate(client, monkeypatch):
     monkeypatch.delenv('ACCESS_PASSWORD')
     # 关闭口令后恢复开放
     assert client.get('/api/sessions').status_code == 200
+
+
+def test_gzip_and_static_cache_headers(client):
+    """传输层优化：>1KB JSON 走 gzip；带 hash 的 js/css immutable 缓存；index.html 协商缓存"""
+    assert put_session(client, session_payload('gzip-big', 'x' * 5000)).status_code == 200
+    compressed = client.get('/api/sessions/gzip-big', headers={'accept-encoding': 'gzip'})
+    assert compressed.headers.get('content-encoding') == 'gzip'
+    # 小响应不压缩（minimum_size=1024）
+    assert 'content-encoding' not in client.get('/api/health', headers={'accept-encoding': 'gzip'}).headers
+
+    from server.config import DIST_DIR
+
+    if not (DIST_DIR / 'index.html').is_file():
+        pytest.skip('dist 未构建，跳过静态资源缓存头测试')
+    assert client.get('/').headers['cache-control'] == 'no-cache'
+    hashed_js = next((DIST_DIR / 'static' / 'js').glob('main.*.js')).name
+    js = client.get(f'/static/js/{hashed_js}')
+    assert js.status_code == 200
+    assert js.headers['cache-control'] == 'public, max-age=31536000, immutable'

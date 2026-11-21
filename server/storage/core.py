@@ -115,4 +115,7 @@ def connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     # WAL：读写互不阻塞；本地单用户场景足够，进程外访问同一文件时也安全
     conn.execute('PRAGMA journal_mode=WAL')
+    # 写忙时等 5s 再报错（多请求并发落盘 + e2e 双进程访问），NORMAL 在 WAL 下足够安全且更快
+    conn.execute('PRAGMA busy_timeout=5000')
+    conn.execute('PRAGMA synchronous=NORMAL')
     return conn

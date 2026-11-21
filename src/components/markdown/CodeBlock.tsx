@@ -1,8 +1,8 @@
 import { useTranslate } from '../../i18n/index.js'
 import { memo, useEffect, useMemo, useReducer, useState } from 'react'
-import Prism from 'prismjs'
 import {
   getHighlightLang,
+  getPrism,
   isHighlightLoaded,
   loadHighlight,
 } from '../../services/markdown/highlight.js'
@@ -12,6 +12,17 @@ import { useAlive } from '../../utils/useAlive.js'
 import { copyText } from '../../utils/clipboard.js'
 import { MermaidDiagram } from './MermaidDiagram.js'
 import styles from './CodeBlock.module.scss'
+
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
+
+/** Prism 核心未就绪时的回退：与 Prism.highlight 一样做 HTML 转义 */
+const escapeHtml = (text: string): string => text.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char)
 
 /** 代码块标题栏：左侧语言名，右侧复制 */
 const CodeInfoRow = ({
@@ -115,8 +126,13 @@ export const CodeBlock = memo(function CodeBlock({
     }
   }, [lang, loaded, rerender])
   const renderedHtml = useMemo(() => {
+    const prism = getPrism()
+    if (!prism) {
+      // 核心尚未加载完成：与 Prism.highlight 一致地做 HTML 转义，避免 raw 代码注入
+      return escapeHtml(code)
+    }
     const name = lang !== null && loaded ? lang : 'plaintext'
-    return Prism.highlight(code, Prism.languages[name], name)
+    return prism.highlight(code, prism.languages[name], name)
   }, [code, lang, loaded])
   return (
     <div className="md-code-block">

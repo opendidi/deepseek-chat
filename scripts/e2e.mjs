@@ -95,6 +95,8 @@ const proc = spawn(
 )
 
 let ws
+// 声明在 try 外：catch 里打印页面 console 错误时可见（const 在 try 内则 catch 抛 ReferenceError）
+const consoleErrors = []
 try {
   let target
   for (let i = 0; i < 60; i += 1) {
@@ -114,7 +116,6 @@ try {
 
   let seq = 0
   const pending = new Map()
-  const consoleErrors = []
   const cssResponses = []
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data)
@@ -182,7 +183,7 @@ try {
       const events = [
         { type: 'message_start', message: { id: 'm1', model: 'deepseek-flash', usage } },
         { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
-        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '需要我详细讲某个规则吗？' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '先看流程图：\\n\\n\`\`\`mermaid\\ngraph TD\\nA[开始] --> B[结束]\\n\`\`\`\\n\\n再看代码：\\n\\n\`\`\`ts\\nconst answer: number = 42\\n\`\`\`\\n\\n需要我详细讲某个规则吗？' } },
         { type: 'content_block_stop', index: 0 },
         { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage },
         { type: 'message_stop' },
@@ -243,6 +244,18 @@ try {
   if (!replyState.hasText || replyState.paragraphs === 0) {
     throw new Error(`回复正文未就绪：${JSON.stringify(replyState)}`)
   }
+  // mermaid 真渲染断言：SVG 出现在图表容器里（懒加载 mermaid chunk + d3 渲染整条链路）
+  const mermaidReady = await waitFor(
+    () => evaluate(`!!document.querySelector('.md-mermaid-diagram svg')`),
+    20_000
+  )
+  if (!mermaidReady) throw new Error('mermaid 图表未渲染出 SVG')
+  // prism 懒加载断言：核心与 ts 语言包都是动态 chunk，token 出现才算高亮生效
+  const highlightReady = await waitFor(
+    () => evaluate(`!!document.querySelector('.md-code-block pre .token')`),
+    10_000
+  )
+  if (!highlightReady) throw new Error('代码块高亮未生效（prism 懒加载）')
   const selected = await evaluate(`(() => {
     const p = [...document.querySelectorAll('.ds-assistant-message-main-content p')].at(-1);
     if (!p) return false;

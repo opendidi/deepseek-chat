@@ -144,9 +144,10 @@ export const createConfig = ({
   // 但保留告警，入口明显膨胀时仍会提示。
   // dev 产物未压缩，体积告警只会干扰启动输出；生产构建保留提示
   // 统计分区已按需加载，主包仍包含 i18n、设置项与本机账本采集入口
+  // maxAssetSize 覆盖最大的懒加载分包（mermaid 12 vendors 约 1.4MiB，一次性加载不拆碎）
   performance: {
     hints: dev ? false : 'warning',
-    maxAssetSize: 700 * 1024,
+    maxAssetSize: 1.5 * 1024 * 1024,
     maxEntrypointSize: 900 * 1024,
   },
   devServer: { port: DEV_PORT, ...devServer },
