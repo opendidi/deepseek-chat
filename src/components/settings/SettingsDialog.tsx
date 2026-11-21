@@ -27,6 +27,7 @@ import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, loadProvinces, type ProvinceOption } from '../../services/location.js'
 import {
   isChineseBrowser,
+  setAmapToolOptOut,
   setApiOrigin,
   setAgentTools,
   setAutoCompress,
@@ -707,7 +708,13 @@ const AgentToolSettings = () => {
                 tool.requiresConsent ? `${t(TOOL_CATEGORY_KEYS[tool.category])} · ${t('toolRequiresConsent')}` : undefined
               }
               checked={enabled.includes(tool.name)}
-              onChange={(value) => toggleToolName(tool.name, value)}
+              onChange={(value) => {
+                toggleToolName(tool.name, value)
+                // 用户显式关闭地图工具时记录，服务器 Key 配置后也不会被自动同步反复开启
+                if (tool.category === 'map' && !value) {
+                  setAmapToolOptOut(tool.name)
+                }
+              }}
             />
           ))}
         </div>

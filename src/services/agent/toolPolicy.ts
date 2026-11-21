@@ -49,12 +49,21 @@ export const resolveChatTools = ({
   }
   const allowClient = mode === 'full' || agentTools
   const names = new Set(
-    TOOL_REGISTRY.filter(
-      (tool) =>
-        enabledTools.has(tool.name) && (tool.category !== 'workspace' || mode === 'full')
-    ).map((tool) => tool.name)
+    TOOL_REGISTRY.filter((tool) => {
+      if (!enabledTools.has(tool.name)) {
+        return false
+      }
+      // 地图工具只由自身开关与服务器 Key 配置控制，不走 agentTools 总开关
+      if (tool.category === 'map') {
+        return true
+      }
+      if (tool.category === 'workspace') {
+        return mode === 'full'
+      }
+      return allowClient
+    }).map((tool) => tool.name)
   )
-  const client = allowClient ? clientToolParams(names, locale) : []
+  const client = clientToolParams(names, locale)
   return {
     tools: [...serverTools(mode === 'full' || search), ...client],
     clientNames: new Set(client.map((tool) => tool.name)),

@@ -63,8 +63,10 @@ test('聊天模式决定实际下发的工具集', () => {
   assert.equal(standard.tools[0].name, 'deepseek_read_url')
 
   const noClient = resolveChatTools({ ...base, mode: 'standard', agentTools: false })
-  assert.equal(noClient.tools.length, 2)
-  assert.equal(noClient.clientNames.size, 0)
+  // agentTools 总开关只拦浏览器类工具；地图类工具由自身开关控制
+  const amapNames = ALL_TOOL_NAMES.filter((name) => name.startsWith('amap_'))
+  assert.equal(noClient.tools.length, 2 + amapNames.length)
+  assert.equal(noClient.clientNames.size, amapNames.length)
 
   const full = resolveChatTools({ ...base, mode: 'full', agentTools: false, search: false })
   // full 模式：仅服务端搜索关闭（2 个服务端工具）+ 全部客户端工具

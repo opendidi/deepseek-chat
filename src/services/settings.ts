@@ -6,6 +6,7 @@ import { isSafeModelId } from '../utils/modelId.js'
 import { normalizeLocation, parseLocationShape, type UserLocation } from './location.js'
 import {
   ALL_TOOL_NAMES,
+  AMAP_TOOL_NAMES,
   DEFAULT_TOOL_NAMES,
   type ChatMode,
 } from './agent/toolConstants.js'
@@ -90,6 +91,8 @@ const KEYS = {
   agentTools: 'deepseek-chat:agent-tools',
   chatMode: 'deepseek-chat:chat-mode',
   enabledToolNames: 'deepseek-chat:enabled-tool-names',
+  /** 用户显式关闭过的地图工具：服务器配置了 Key 也不再自动开启 */
+  amapOptOut: 'deepseek-chat:amap-optout',
   usageFreeServerTools: 'deepseek-chat:usage-free-server-tools',
   usageDailyQuota: 'deepseek-chat:usage-daily-quota',
   apiOrigin: 'deepseek-chat:api-origin',
@@ -374,6 +377,50 @@ export const setContinueAfterRefusal = (continueAfterRefusal: boolean) => {
 export const setAutoCompress = (autoCompress: boolean) => {
   write(KEYS.autoCompress, String(autoCompress))
   useSettings.setState({ autoCompress })
+}
+
+/**
+ * 服务器配置了 AMAP_KEY 时自动启用地图工具：
+ * 每次启动按服务器回报同步一次，用户显式关闭过的工具保持关闭。
+ */
+export const syncAmapToolAvailability = (serverAmapConfigured: boolean) => {
+  if (!serverAmapConfigured) {
+    return
+  }
+  let optOut: string[] = []
+  try {
+    const parsed: unknown = JSON.parse(read(KEYS.amapOptOut) ?? '[]')
+    optOut = Array.isArray(parsed)
+      ? parsed.filter((name): name is string => typeof name === 'string')
+      : []
+  } catch {
+    optOut = []
+  }
+  const missing = AMAP_TOOL_NAMES.filter(
+    (name) => !useSettings.getState().enabledToolNames.includes(name) && !optOut.includes(name)
+  )
+  if (missing.length === 0) {
+    return
+  }
+  const merged = [...useSettings.getState().enabledToolNames, ...missing]
+  write(KEYS.enabledToolNames, JSON.stringify(merged))
+  useSettings.setState({ enabledToolNames: merged })
+}
+
+/** 用户显式关闭地图工具时记录，避免自动同步反复开启 */
+export const setAmapToolOptOut = (name: string) => {
+  try {
+    const parsed: unknown = JSON.parse(read(KEYS.amapOptOut) ?? '[]')
+    const list = Array.isArray(parsed)
+      ? parsed.filter((name): name is string => typeof name === 'string')
+      : []
+    if (!list.includes(name)) {
+      list.push(name)
+      write(KEYS.amapOptOut, JSON.stringify(list))
+    }
+  } catch {
+    // 存储不可用时跳过记录
+  }
 }
 
 export const setAgentTools = (agentTools: boolean) => {

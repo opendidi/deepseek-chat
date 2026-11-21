@@ -417,7 +417,6 @@ export const zh = {
   toolNameAmapRoutePlanning: '高德·路线规划',
   toolCategoryMap: '地图',
   agentToolAmapNoKey: '地图工具需要服务端配置高德 Key：在部署目录的 .env 中设置 AMAP_KEY（高德开放平台「Web 服务」类型）后重启服务。',
-  agentToolAmapHttpError: '高德服务请求失败（HTTP {status}）',
   toolCategoryBasic: '基础',
   toolCategoryBrowser: '浏览器',
   toolCategoryWorkspace: '工作区',

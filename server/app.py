@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import DATA_DIR, DIST_DIR
+from .config import AMAP_KEY, DATA_DIR, DIST_DIR
 from .routers import ROUTERS
 from .storage import configure
 
@@ -68,7 +68,7 @@ async def guard_cross_site(request: Request, call_next):
 
 @app.get('/api/health')
 def health() -> dict:
-    return {'ok': True}
+    return {'ok': True, 'amap': bool(AMAP_KEY)}
 
 
 for _router in ROUTERS:

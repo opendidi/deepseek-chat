@@ -26,6 +26,38 @@ export const TOOL_PROMPTS: Record<
   string,
   Record<PromptLocale, { description: string; expression?: string }>
 > = {
+  amap_place_search: {
+    'zh-CN': {
+      description: '高德地图 POI 搜索：按关键词查找地点（餐饮、加油站、景点等），返回名称、地址与坐标。回答位置类问题时应优先调用本工具；结果会自动以静态地图卡片展示给用户。',
+    },
+    'en-US': {
+      description: 'Amap POI search: find places by keyword (restaurants, gas stations, attractions). Prefer this tool for location questions; results are shown to the user as an automatic static map card.',
+    },
+  },
+  amap_geocode: {
+    'zh-CN': {
+      description: '高德地理编码：把结构化地址转换为经纬度坐标与区划代码。需要坐标或展示位置时使用。',
+    },
+    'en-US': {
+      description: 'Amap geocoding: convert a structured address to coordinates and district code. Use when coordinates or a map display are needed.',
+    },
+  },
+  amap_weather: {
+    'zh-CN': {
+      description: '高德实时天气：查询指定城市的当前天气（温度、风向、风力）。城市用中文名。',
+    },
+    'en-US': {
+      description: 'Amap live weather: current weather for a city by its Chinese name (temperature, wind).',
+    },
+  },
+  amap_route_planning: {
+    'zh-CN': {
+      description: '高德路线规划：查询两地之间的驾车或步行路线，返回距离与耗时摘要。地址用中文名；路线会自动以地图卡片展示。',
+    },
+    'en-US': {
+      description: 'Amap route planning: driving or walking route between two places by Chinese address, returning distance and duration. The route is shown to the user as an automatic map card.',
+    },
+  },
   get_current_time: {
     'zh-CN': {
       description: '获取用户本机的当前日期、时间与时区。回答涉及「今天」「现在」等问题时使用。',

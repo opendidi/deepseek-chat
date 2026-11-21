@@ -18,6 +18,14 @@ export const ALL_TOOL_NAMES: readonly string[] = [
 /** 默认只开启无隐私风险的基础工具；页面内容工具需用户单独授权 */
 export const DEFAULT_TOOL_NAMES: readonly string[] = ['get_current_time', 'calculate']
 
+/** 高德地图类工具名：服务端配置 AMAP_KEY 后自动可用，独立于 agentTools 总开关 */
+export const AMAP_TOOL_NAMES: readonly string[] = [
+  'amap_place_search',
+  'amap_geocode',
+  'amap_weather',
+  'amap_route_planning',
+]
+
 /** Agent 工具往返的最大轮次 */
 export const MAX_AGENT_TURNS = 6
 

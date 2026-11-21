@@ -433,7 +433,6 @@ export const en = {
   toolNameAmapRoutePlanning: 'Amap route planning',
   toolCategoryMap: 'Map',
   agentToolAmapNoKey: 'Map tools need the Amap key configured on the server: set AMAP_KEY (an Amap "Web service" key) in the deployment .env file and restart.',
-  agentToolAmapHttpError: 'Amap request failed (HTTP {status})',
   toolCategoryBasic: 'Basic',
   toolCategoryBrowser: 'Browser',
   toolCategoryWorkspace: 'Workspace',
