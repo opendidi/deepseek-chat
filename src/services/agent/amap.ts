@@ -1,5 +1,6 @@
 import { translate } from '../../i18n/index.js'
 import { useSettings } from '../settings.js'
+import { requestAmapKey, useAmapKeyGate } from './amapKeyGate.js'
 import type { ClientTool } from './tools.js'
 
 /**
@@ -16,8 +17,17 @@ const AMAP_TIMEOUT_MS = 10_000
 
 type AmapParams = Record<string, string | number | undefined>
 
-const requireKey = (): string => {
-  const key = useSettings.getState().amapKey?.trim()
+const requireKey = async (signal?: AbortSignal): Promise<string> => {
+  const existing = useSettings.getState().amapKey?.trim()
+  if (existing) {
+    return existing
+  }
+  // 用户刚取消过输入门：本轮直接回引导错误，不重复弹门
+  if (useAmapKeyGate.getState().cancelled) {
+    throw new Error(translate('agentToolAmapNoKey'))
+  }
+  // 未配置：弹出输入门等用户填写；取消时回传引导错误，不悬挂回合
+  const key = await requestAmapKey(signal)
   if (!key) {
     throw new Error(translate('agentToolAmapNoKey'))
   }
@@ -30,7 +40,7 @@ const amapGet = async (
   params: AmapParams,
   signal?: AbortSignal
 ): Promise<Record<string, unknown>> => {
-  const key = requireKey()
+  const key = await requireKey(signal)
   const search = new URLSearchParams()
   search.set('key', key)
   for (const [name, value] of Object.entries(params)) {

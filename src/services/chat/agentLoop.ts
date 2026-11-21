@@ -1,4 +1,5 @@
 import { runClientTool } from '../agent/tools.js'
+import { isAmapConfigured, requestAmapKey } from '../agent/amapKeyGate.js'
 import type { ToolStep } from './types.js'
 import { readToolInput } from './reply.js'
 
@@ -12,6 +13,11 @@ export const runToolSteps = async (
   signal: AbortSignal,
   allowedNames?: ReadonlySet<string>
 ): Promise<ToolStep[]> => {
+  // 回合前置检查：本轮包含地图工具且未配置高德 Key 时，先弹出输入门等待用户填写
+  //（此处暂停只推迟下一次 API 请求，SSE 流早已结束，不会阻塞正在生成的回复）
+  if (steps.some((step) => step.name.startsWith('amap_')) && !isAmapConfigured()) {
+    await requestAmapKey(signal)
+  }
   const results = await Promise.all(
     steps.map(async (step) => {
       const startedAt = Date.now()

@@ -34,7 +34,6 @@ import {
   setContinueAfterRefusal,
   setFontSize,
   setLocale,
-  setAmapKey,
   setLocation,
   setMaxTokens,
   setPreventWithdraw,
@@ -683,8 +682,6 @@ const TOOL_CATEGORY_KEYS = {
 const AgentToolSettings = () => {
   const t = useTranslate()
   const enabled = useSettings((state) => state.enabledToolNames)
-  const amapKey = useSettings((state) => state.amapKey)
-  const [keyDraft, setKeyDraft] = useState(amapKey)
   // 按分类分组，保持注册表顺序
   const groups = useMemo(() => {
     const map = new Map<ToolCategory, ClientTool[]>()
@@ -695,11 +692,6 @@ const AgentToolSettings = () => {
     }
     return [...map.entries()]
   }, [])
-  const commitKey = () => {
-    if (keyDraft.trim() !== amapKey) {
-      setAmapKey(keyDraft)
-    }
-  }
   return (
     <div className={styles.cell}>
       <div className={styles.label}>{t('settingsAgentToolsTitle')}</div>
@@ -718,28 +710,6 @@ const AgentToolSettings = () => {
               onChange={(value) => toggleToolName(tool.name, value)}
             />
           ))}
-          {category === 'map' ? (
-            <div className={styles.amapKeyBlock}>
-              <div className={clsx(styles.description, styles.amapKeyHint)}>
-                {t('settingsAmapKeyDesc')}
-              </div>
-              <input
-                type="text"
-                className={styles.textInput}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="在高德开放平台创建「Web 服务」Key 后粘贴"
-                value={keyDraft}
-                onChange={(event) => setKeyDraft(event.target.value)}
-                onBlur={commitKey}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    commitKey()
-                  }
-                }}
-              />
-            </div>
-          ) : null}
         </div>
       ))}
     </div>

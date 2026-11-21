@@ -431,6 +431,8 @@ export const en = {
   toolCategoryMap: 'Map',
   agentToolAmapNoKey: 'Amap key is not configured. Tell the user to paste an Amap "Web service" key in Settings → Model → Agent tools.',
   agentToolAmapHttpError: 'Amap request failed (HTTP {status})',
+  amapGateTitle: 'The agent needs an Amap key',
+  amapGateSubmit: 'Save and continue',
   settingsAmapKey: 'Amap web service key',
   settingsAmapKeyDesc: 'Map agent tools (place search, weather, routes) need an Amap "Web service" key. Create one in the Amap console and paste it here.',
   toolCategoryBasic: 'Basic',

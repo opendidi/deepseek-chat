@@ -415,6 +415,8 @@ export const zh = {
   toolCategoryMap: '地图',
   agentToolAmapNoKey: '未配置高德 Key。请提醒用户：在 设置 → 模型 → Agent 工具 中填写高德「Web 服务」Key 后即可使用地图功能。',
   agentToolAmapHttpError: '高德服务请求失败（HTTP {status}）',
+  amapGateTitle: 'Agent 需要高德地图 Key',
+  amapGateSubmit: '保存并继续',
   settingsAmapKey: '高德 Web 服务 Key',
   settingsAmapKeyDesc: '地图类 Agent 工具（地点搜索、天气、路线）需要高德开放平台的「Web 服务」类型 Key，在高德开放平台控制台创建后粘贴到这里。',
   toolCategoryBasic: '基础',

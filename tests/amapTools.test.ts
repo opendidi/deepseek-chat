@@ -6,6 +6,9 @@ import { installMemoryStorage } from './helpers/localStorage.js'
 installMemoryStorage()
 const { setAmapKey } = await import('../src/services/settings.js')
 const { TOOL_REGISTRY, runClientTool } = await import('../src/services/agent/tools.js')
+const { runToolSteps } = await import('../src/services/chat/agentLoop.js')
+const { cancelAmapKey, resolveAmapKeyGate, useAmapKeyGate } = await import('../src/services/agent/amapKeyGate.js')
+import type { ToolStep } from '../src/services/chat/types.js'
 
 const amapTools = TOOL_REGISTRY.filter((tool) => tool.name.startsWith('amap_'))
 
@@ -39,12 +42,69 @@ test('高德工具已注册且默认不启用名单不含它们', () => {
   }
 })
 
-test('未配置高德 Key 时返回引导错误', async () => {
-  setAmapKey('')
-  const result = await runClientTool('amap_place_search', { keywords: '故宫' })
-  assert.equal(result.isError, true)
-  assert.match(result.content, /高德 Key/)
+const amapStep = (name: string, inputJson: string): ToolStep => ({
+  id: `${name}-1`,
+  name,
+  inputJson,
+  status: 'pending',
 })
+
+const waitGateOpen = async () => {
+  for (let i = 0; i < 40; i += 1) {
+    if (useAmapKeyGate.getState().open) {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return false
+}
+
+test('未配置 Key：回合前置弹出输入门，填写后本轮工具继续执行', async () => {
+  setAmapKey('')
+  const controller = new AbortController()
+  const pending = runToolSteps([amapStep('amap_place_search', JSON.stringify({ keywords: '故宫' }))], controller.signal)
+  assert.equal(await waitGateOpen(), true, '输入门应弹出')
+
+  stubFetchAndResolve()
+  const steps = await pending
+  assert.equal(steps[0].status, 'done')
+  assert.match(steps[0].result ?? '', /故宫博物院/)
+  assert.equal(useAmapKeyGate.getState().open, false)
+})
+
+test('用户取消输入门：地图步骤以引导错误结束，不悬挂回合', async () => {
+  setAmapKey('')
+  const controller = new AbortController()
+  const pending = runToolSteps([amapStep('amap_place_search', JSON.stringify({ keywords: '故宫' }))], controller.signal)
+  assert.equal(await waitGateOpen(), true)
+  cancelAmapKey()
+  const steps = await pending
+  assert.equal(steps[0].status, 'error')
+  assert.match(steps[0].result ?? '', /高德 Key/)
+})
+
+/** 输入门等待期间的 fetch 桩：提交口令后调用并返回 POI 数据 */
+function stubFetchAndResolve() {
+  const original = globalThis.fetch
+  globalThis.fetch = (async (input: unknown) => {
+    const url = new URL(String(input))
+    if (url.pathname === '/v3/place/text') {
+      return new Response(
+        JSON.stringify({
+          status: '1',
+          pois: [
+            { name: '故宫博物院', address: '景山前街4号', location: '116.397,39.918', pname: '北京市', cityname: '北京市', adname: '东城区' },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    return new Response('{}', { status: 200 })
+  }) as typeof fetch
+  setAmapKey('test-key')
+  resolveAmapKeyGate('test-key')
+  void original
+}
 
 test('POI 搜索：参数拼接与结果精简', async () => {
   setAmapKey('test-key')
