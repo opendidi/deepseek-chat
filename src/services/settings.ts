@@ -52,6 +52,8 @@ type Settings = {
   autoCompress: boolean
   /** 允许模型调用浏览器端工具并自动执行多轮工具往返 */
   agentTools: boolean
+  /** 高德开放平台「Web 服务」Key；为空时地图类 Agent 工具返回引导错误 */
+  amapKey: string
   /** 输入栏聊天模式：仅聊天 / 标准 / 完整，决定实际下发的工具集 */
   chatMode: ChatMode
   /** 按工具粒度开启的客户端工具名；需要授权的页面工具默认关闭 */
@@ -88,6 +90,7 @@ const KEYS = {
   continueAfterRefusal: 'deepseek-chat:continue-after-refusal',
   autoCompress: 'deepseek-chat:auto-compress',
   agentTools: 'deepseek-chat:agent-tools',
+  amapKey: 'deepseek-chat:amap-key',
   chatMode: 'deepseek-chat:chat-mode',
   enabledToolNames: 'deepseek-chat:enabled-tool-names',
   usageFreeServerTools: 'deepseek-chat:usage-free-server-tools',
@@ -267,6 +270,7 @@ export const useSettings = create<Settings>(() => ({
   continueAfterRefusal: initialFlag(KEYS.continueAfterRefusal, false),
   autoCompress: initialFlag(KEYS.autoCompress, false),
   agentTools: initialFlag(KEYS.agentTools, false),
+  amapKey: read(KEYS.amapKey) ?? '',
   chatMode: initialChatMode(),
   enabledToolNames: initialEnabledTools(),
   usageFreeServerTools: initialFlag(KEYS.usageFreeServerTools, true),
@@ -374,6 +378,11 @@ export const setContinueAfterRefusal = (continueAfterRefusal: boolean) => {
 export const setAutoCompress = (autoCompress: boolean) => {
   write(KEYS.autoCompress, String(autoCompress))
   useSettings.setState({ autoCompress })
+}
+
+export const setAmapKey = (amapKey: string) => {
+  write(KEYS.amapKey, amapKey.trim())
+  useSettings.setState({ amapKey: amapKey.trim() })
 }
 
 export const setAgentTools = (agentTools: boolean) => {

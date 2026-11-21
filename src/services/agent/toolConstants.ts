@@ -9,6 +9,10 @@ export const ALL_TOOL_NAMES: readonly string[] = [
   'get_current_time',
   'calculate',
   'get_page_context',
+  'amap_place_search',
+  'amap_geocode',
+  'amap_weather',
+  'amap_route_planning',
 ]
 
 /** 默认只开启无隐私风险的基础工具；页面内容工具需用户单独授权 */

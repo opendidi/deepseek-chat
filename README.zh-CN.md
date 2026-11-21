@@ -52,6 +52,7 @@ pnpm dev                      # 终端 2：前端开发服务器（http://localh
 
 - 设置 → 模型 → 启用 Agent 工具后，模型可调用浏览器端工具，并自动完成「调用 → 本地执行 → 回传结果」的多轮循环（最多 6 轮，可随时停止）。
 - 内置 `get_current_time`、`calculate`（不使用 `eval`）、`get_page_context`；工具调用步骤与结果在回答中展示。
+- **高德地图工具**：在设置中粘贴高德开放平台「Web 服务」Key 后，Agent 可调用地点搜索（`amap_place_search`）、地理编码（`amap_geocode`）、实时天气（`amap_weather`）与路线规划（`amap_route_planning`）。工具默认关闭，需按工具粒度开启。
 - 关闭时请求不声明客户端工具，保持普通单次对话。
 
 ### 输入、阅读与界面

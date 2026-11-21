@@ -57,8 +57,9 @@ test('聊天模式决定实际下发的工具集', () => {
   assert.equal(chat.clientNames.size, 0)
 
   const standard = resolveChatTools({ ...base, mode: 'standard' })
-  assert.equal(standard.tools.length, 5)
-  assert.equal(standard.clientNames.size, 3)
+  // 2 个服务端工具 + 全部已启用客户端工具（数量随注册表增长，不硬编码）
+  assert.equal(standard.tools.length, 2 + ALL_TOOL_NAMES.length)
+  assert.equal(standard.clientNames.size, ALL_TOOL_NAMES.length)
   assert.equal(standard.tools[0].name, 'deepseek_read_url')
 
   const noClient = resolveChatTools({ ...base, mode: 'standard', agentTools: false })
@@ -66,8 +67,9 @@ test('聊天模式决定实际下发的工具集', () => {
   assert.equal(noClient.clientNames.size, 0)
 
   const full = resolveChatTools({ ...base, mode: 'full', agentTools: false, search: false })
-  assert.equal(full.tools.length, 5)
-  assert.equal(full.clientNames.size, 3)
+  // full 模式：仅服务端搜索关闭（2 个服务端工具）+ 全部客户端工具
+  assert.equal(full.tools.length, 2 + ALL_TOOL_NAMES.length)
+  assert.equal(full.clientNames.size, ALL_TOOL_NAMES.length)
   assert.ok(full.tools.some((tool) => tool.name === 'deepseek_web_search'))
 })
 

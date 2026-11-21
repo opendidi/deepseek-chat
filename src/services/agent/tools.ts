@@ -1,6 +1,7 @@
 import { translate } from '../../i18n/index.js'
 import type { ClientToolParam } from '../api/types.js'
 import { TOOL_PROMPTS, promptLocale } from './promptI18n.js'
+import { createAmapTools } from './amap.js'
 
 /**
  * 浏览器端可执行的客户端工具。请求里只声明 name / description / input_schema，
@@ -10,7 +11,7 @@ import { TOOL_PROMPTS, promptLocale } from './promptI18n.js'
  * 不接触文件系统与进程，结果统一截断，避免把大对象塞进上下文。
  */
 
-export type ToolCategory = 'basic' | 'browser' | 'workspace'
+export type ToolCategory = 'basic' | 'browser' | 'map' | 'workspace'
 
 export type ClientTool = {
   name: string
@@ -202,6 +203,7 @@ export const TOOL_REGISTRY: readonly ClientTool[] = [
       })
     },
   },
+  ...createAmapTools(),
 ]
 
 /** 兼容既有调用点 */

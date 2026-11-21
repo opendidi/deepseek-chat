@@ -33,6 +33,7 @@ import {
   setContinueAfterRefusal,
   setFontSize,
   setLocale,
+  setAmapKey,
   setLocation,
   setMaxTokens,
   setPreventWithdraw,
@@ -664,11 +665,16 @@ const TOOL_LABEL_KEYS: Record<string, TranslationKey> = {
   get_current_time: 'toolNameGetCurrentTime',
   calculate: 'toolNameCalculate',
   get_page_context: 'toolNameGetPageContext',
+  amap_place_search: 'toolNameAmapPlaceSearch',
+  amap_geocode: 'toolNameAmapGeocode',
+  amap_weather: 'toolNameAmapWeather',
+  amap_route_planning: 'toolNameAmapRoutePlanning',
 }
 
 const TOOL_CATEGORY_KEYS = {
   basic: 'toolCategoryBasic',
   browser: 'toolCategoryBrowser',
+  map: 'toolCategoryMap',
   workspace: 'toolCategoryWorkspace',
 } as const
 
@@ -693,6 +699,40 @@ const AgentToolSettings = () => {
           onChange={(value) => toggleToolName(tool.name, value)}
         />
       ))}
+      <AmapKeySetting />
+    </div>
+  )
+}
+
+/** 高德开放平台 Web 服务 Key：地图类 Agent 工具（地点搜索 / 天气 / 路线）的凭据 */
+const AmapKeySetting = () => {
+  const t = useTranslate()
+  const amapKey = useSettings((state) => state.amapKey)
+  const [value, setValue] = useState(amapKey)
+  const commit = () => {
+    if (value.trim() !== amapKey) {
+      setAmapKey(value)
+    }
+  }
+  return (
+    <div className={styles.cell}>
+      <div className={styles.label}>{t('settingsAmapKey')}</div>
+      <div className={styles.description}>{t('settingsAmapKeyDesc')}</div>
+      <input
+        type="text"
+        className={styles.textInput}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder="在高德开放平台创建「Web 服务」Key 后粘贴"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commit()
+          }
+        }}
+      />
     </div>
   )
 }
