@@ -62,7 +62,10 @@ def put_session(client: TestClient, session: dict, files: dict | None = None):
 def test_health(client):
     response = client.get('/api/health')
     assert response.status_code == 200
-    assert response.json() == {'ok': True}
+    data = response.json()
+    assert data['ok'] is True
+    # amap 字段随服务器 AMAP_KEY 配置变化，只断言存在
+    assert 'amap' in data
 
 
 def test_save_and_get_roundtrip(client):
