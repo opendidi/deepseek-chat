@@ -5,6 +5,10 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data # SQLite 数据持久化在宿主机 ./data
+    # 可选：在项目根目录创建 .env（参考 .env.example），设置 ACCESS_PASSWORD 等变量
+    env_file:
+      - path: .env
+        required: false
     restart: unless-stopped
     # 公网部署时取消注释并设置访问口令（前端会弹出输入门）：
     # environment:

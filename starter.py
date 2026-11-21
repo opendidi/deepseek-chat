@@ -202,13 +202,15 @@ def main() -> None:
     parser.add_argument('--no-open', action='store_true', help='不自动打开浏览器')
     args = parser.parse_args()
 
+    # 预加载根目录 .env（仅标准库），日志展示的数据目录与子进程实际使用的一致
+    sys.path.insert(0, str(ROOT))
+    from server.config import DATA_DIR, DIST_DIR
+
     backend_python = ensure_venv()
     ensure_dist(args.no_build)
     ensure_port_free(args.host, args.port)
-    # DATA_DIR 只在未显式设置时给默认值；config.py 在导入时读取环境变量
-    os.environ.setdefault('DATA_DIR', str(ROOT / 'data'))
-
-    log(f'启动服务：http://{args.host}:{args.port}/ （数据目录 {os.environ["DATA_DIR"]}）')
+    # .env 与 DATA_DIR 默认值由 server/config.py 在子进程导入时统一处理
+    log(f'启动服务：http://{args.host}:{args.port}/ （数据目录 {DATA_DIR}）')
     log('停止：Ctrl+C')
     open_when_ready(args.host, args.port, not args.no_open)
     try:

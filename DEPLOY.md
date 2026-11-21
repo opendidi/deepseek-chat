@@ -51,6 +51,8 @@ ExecStart=/opt/deepseek-chat/.venv/bin/python -m uvicorn server.app:app --host 1
 Restart=always
 RestartSec=3
 Environment=DATA_DIR=/opt/deepseek-chat/data
+# 可选：访问口令（或改用 EnvironmentFile=/opt/deepseek-chat/.env）
+# Environment=ACCESS_PASSWORD=change-me
 # 公网部署强烈建议设置访问口令（前端会弹出输入门）；不设置则 /api 对能访问到服务的人完全开放
 # Environment=ACCESS_PASSWORD=change-me
 
@@ -132,6 +134,7 @@ services:
 ## 数据与运维
 
 - **备份**：停服后复制 `data/chats.db`（附件原件也在其中）；`DATA_DIR` 环境变量可改位置。
+- **环境变量**：复制 `.env.example` 为 `.env` 即可配置数据目录与访问口令（`ACCESS_PASSWORD`），`starter.py` 与 uvicorn 都会自动读取；模板见 [.env.example](.env.example)。
 - **升级**：`git pull` → 重新 `pnpm build`（或上传新 dist）→ 重启服务；SQLite 数据不受影响。
 - **日志**：uvicorn 输出在 systemd journal（`journalctl -u deepseek-chat`）或容器日志里。
 - **多用户语义**：当前是单库共享模型。要每人独立历史，需要新增用户体系（较大改动，尚未实现）。
