@@ -158,7 +158,8 @@ export default defineConfig(
   // 存储后端（server/，pnpm backend 启动）与页面同源时无需代理；开发模式下 /api 转给本机服务
   createConfig({
     devServer: {
-      proxy: [{ context: '/api', target: 'http://127.0.0.1:8000' }],
+      // 与 scripts/backend.mjs、devall.mjs 的 BACKEND_PORT 保持一致
+      proxy: [{ context: '/api', target: `http://127.0.0.1:${process.env.BACKEND_PORT || '8000'}` }],
     },
   })
 )

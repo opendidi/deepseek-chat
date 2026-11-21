@@ -2,6 +2,9 @@
 
 本机单用户服务，绑定 127.0.0.1；接口与前端 src/services/chat/db.ts 的函数一一对应，
 存储语义见 storage 包（server/storage/）的模块注释，路由实现在 server/routers/。
+
+静态托管开关：默认托管 dist/（生产单端口形态）；设置 SERVE_DIST=0 后为纯 API 服务
+（本地开发 python starter.py / pnpm backend，前端由 pnpm dev 的 devServer 托管并代理 /api）。
 """
 
 from __future__ import annotations
@@ -92,6 +95,22 @@ def health() -> dict:
 for _router in ROUTERS:
     app.include_router(_router)
 
-# API 路由注册完再挂静态目录，/api/* 优先；dist 尚未构建时只提供 API
-if DIST_DIR.is_dir():
+# API 路由注册完再挂静态目录，/api/* 优先；dist 尚未构建或显式 SERVE_DIST=0 时不托管，
+# 此时 / 返回提示信息（前端由 pnpm dev 的 devServer 托管）
+if DIST_DIR.is_dir() and os.environ.get('SERVE_DIST', '1') != '0':
     app.mount('/', StaticFiles(directory=DIST_DIR, html=True), name='dist')
+else:
+
+    @app.get('/', include_in_schema=False)
+    def index_hint() -> JSONResponse:
+        return JSONResponse(
+            {
+                'detail': '后端为纯 API 服务，未托管前端页面',
+                'hint': {
+                    '开发调试': 'pnpm dev（devServer 默认 8090，/api 已代理到本服务）',
+                    '前后端一起': 'pnpm dev:all',
+                    '单端口生产形态': 'pnpm build 后以默认环境启动 uvicorn（或去掉 SERVE_DIST=0）',
+                },
+            },
+            status_code=404,
+        )

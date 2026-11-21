@@ -1,15 +1,17 @@
-"""一条命令启动本机服务：python starter.py
+"""启动存储后端（纯 API 服务）：python starter.py
 
-自动完成三件事：
+自动完成两件事：
 1. 虚拟环境自举：.venv 不存在时创建并安装 requirements.txt（仅首次，全局 python 即可运行本脚本）；
-2. 前端构建：dist/index.html 缺失时自动执行 pnpm/npm build（可用 --no-build 跳过）；
-3. 启动存储后端（托管 dist 与 /api），就绪后自动打开浏览器。
+2. 启动后端 API（/api/*，不托管前端页面），就绪后日志给出前端地址。
+
+前端服务独立运行：
+    pnpm dev        # devServer 默认 8090，/api 自动代理到本后端（热更新开发）
+    pnpm dev:all    # 后端 + 前端 dev 一起拉起（Ctrl+C 同时退出）
+    pnpm build      # 生产构建；SERVE_DIST 默认开启时 uvicorn 可在单端口托管 dist
 
 常用参数：
     python starter.py                     # 默认 http://127.0.0.1:8000
     python starter.py --port 8010         # 换端口
-    python starter.py --no-open           # 不自动开浏览器
-    python starter.py --no-build          # 跳过前端构建检查
 数据保存在 data/chats.db（可用 DATA_DIR 环境变量改位置）。
 """
 
@@ -17,14 +19,8 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
-import threading
-import time
-import urllib.request
-import venv
-import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -67,45 +63,6 @@ def ensure_venv() -> Path:
     return VENV_PYTHON
 
 
-def ensure_dist(no_build: bool) -> None:
-    """dist/index.html 缺失时自动构建前端；没有 Node 环境则给出明确指引"""
-    if (ROOT / 'dist' / 'index.html').exists() or no_build:
-        return
-    package_manager = shutil.which('pnpm') or shutil.which('npm')
-    if package_manager is None or not (ROOT / 'node_modules').exists():
-        log('dist/ 不存在且未检测到可用的构建环境。')
-        log('请先安装 Node.js 与 pnpm，然后在项目根目录执行：pnpm install && pnpm build')
-        sys.exit(1)
-    log('dist/ 不存在，自动构建前端（约十几秒）...')
-    # pnpm 直接子命令 build；npm 需要 run build
-    build_cmd = ['build'] if 'pnpm' in package_manager.lower() else ['run', 'build']
-    try:
-        subprocess.run([package_manager, *build_cmd], cwd=ROOT, check=True)
-    except subprocess.CalledProcessError:
-        log('前端构建失败，请检查上方构建日志（常见原因：依赖未安装 pnpm install）。')
-        sys.exit(1)
-
-
-def open_when_ready(host: str, port: int, enabled: bool) -> None:
-    """后台轮询 /api/health，服务就绪后打开浏览器（0.0.0.0 时浏览器固定用 127.0.0.1）"""
-    if not enabled:
-        return
-    browser_host = '127.0.0.1' if host == '0.0.0.0' else host
-
-    def wait_and_open() -> None:
-        url = f'http://{browser_host}:{port}/api/health'
-        for _ in range(120):
-            try:
-                if urllib.request.urlopen(url, timeout=1).status == 200:
-                    webbrowser.open(f'http://{browser_host}:{port}/')
-                    return
-            except OSError:
-                pass
-            time.sleep(0.5)
-
-    threading.Thread(target=wait_and_open, daemon=True).start()
-
-
 def ensure_port_free(host: str, port: int) -> None:
     """启动前预检端口：被占用时直接给出明确指引，不等 uvicorn 报错。
 
@@ -135,7 +92,8 @@ def _serve(backend_python: Path, host: str, port: int) -> int:
     返回 uvicorn 的退出码。
     """
     command = [str(backend_python), '-m', 'uvicorn', 'server.app:app', '--host', host, '--port', str(port)]
-    child = subprocess.Popen(command, cwd=ROOT)
+    # 纯 API 形态：显式关闭 dist 托管（app.py 默认开启，供生产单端口部署使用）
+    child = subprocess.Popen(command, cwd=ROOT, env={**os.environ, 'SERVE_DIST': '0'})
     if IS_WINDOWS:
         import ctypes
 
@@ -195,24 +153,21 @@ def _serve(backend_python: Path, host: str, port: int) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='启动 deepseek-chat 本机服务')
+    parser = argparse.ArgumentParser(description='启动 deepseek-chat 存储后端（纯 API 服务）')
     parser.add_argument('--host', default='127.0.0.1', help='监听地址（默认 127.0.0.1，仅本机可访问）')
     parser.add_argument('--port', type=int, default=8000, help='监听端口（默认 8000）')
-    parser.add_argument('--no-build', action='store_true', help='跳过前端构建检查')
-    parser.add_argument('--no-open', action='store_true', help='不自动打开浏览器')
     args = parser.parse_args()
 
     # 预加载根目录 .env（仅标准库），日志展示的数据目录与子进程实际使用的一致
     sys.path.insert(0, str(ROOT))
-    from server.config import DATA_DIR, DIST_DIR
+    from server.config import DATA_DIR
 
     backend_python = ensure_venv()
-    ensure_dist(args.no_build)
     ensure_port_free(args.host, args.port)
     # .env 与 DATA_DIR 默认值由 server/config.py 在子进程导入时统一处理
-    log(f'启动服务：http://{args.host}:{args.port}/ （数据目录 {DATA_DIR}）')
+    log(f'启动后端 API：http://{args.host}:{args.port}/api （数据目录 {DATA_DIR}）')
+    log('前端服务：pnpm dev（默认 http://localhost:8090，/api 自动代理到本后端）；或 pnpm dev:all 一键双启')
     log('停止：Ctrl+C')
-    open_when_ready(args.host, args.port, not args.no_open)
     try:
         # 服务本体跑在 venv 解释器里；本脚本自身只需标准库
         code = _serve(backend_python, args.host, args.port)

@@ -1,5 +1,6 @@
 /**
  * 启动存储后端（server/）：优先使用仓库内的 .venv 解释器，跨平台探测路径。
+ * 开发态纯 API 形态：SERVE_DIST=0 不托管 dist（前端由 pnpm dev 托管并代理 /api）。
  * 用法：pnpm backend（或 BACKEND_PORT=8010 node scripts/backend.mjs）
  */
 import { spawn } from 'node:child_process'
@@ -19,6 +20,6 @@ const port = process.env.BACKEND_PORT || '8000'
 const child = spawn(
   python,
   ['-m', 'uvicorn', 'server.app:app', '--host', '127.0.0.1', '--port', port],
-  { cwd: root, stdio: 'inherit' }
+  { cwd: root, stdio: 'inherit', env: { ...process.env, SERVE_DIST: '0' } }
 )
 child.on('exit', (code) => process.exitCode = code ?? 0)

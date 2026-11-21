@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "rspack serve -c rspack.config.ts --open",
     "backend": "node scripts/backend.mjs",
+    "dev:all": "node scripts/devall.mjs",
     "build": "cross-env NODE_ENV=production rspack build -c rspack.config.ts",
     "type": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node --import ./tests/helpers/register-hooks.mjs --test \".test-build/tests/*.test.js\"",

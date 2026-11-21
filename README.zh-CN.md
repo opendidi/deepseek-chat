@@ -14,19 +14,19 @@
 git clone https://github.com/opendidi/deepseek-chat.git
 cd deepseek-chat
 pnpm install
-python starter.py
+pnpm dev:all
 ```
 
-**日常使用**：`python starter.py` 一条命令即可——自动完成虚拟环境自举、前端构建、启动服务并打开浏览器，后端同时托管 `dist/` 产物与存储接口（`http://127.0.0.1:8000`）。数据保存在 `data/chats.db`（SQLite 单文件，含附件原件），备份即复制该文件；`DATA_DIR` 环境变量可改存储位置。常用参数：`--port 8010` 换端口、`--no-open` 不自动开浏览器。
-
-**前端开发**：前后端分开启动，两个终端——
+**日常使用（前端与后端是两个独立服务）**：`pnpm dev:all` 一条命令同时拉起后端 API（:8000）与前端开发服务（:8090，/api 已代理），Ctrl+C 同时退出；也可以分两个终端各自启动：
 
 ```sh
-python starter.py --no-open   # 终端 1：存储后端（8000）
+python starter.py             # 终端 1：存储后端，纯 API（:8000，不托管前端页面）
 pnpm dev                      # 终端 2：前端开发服务器（http://localhost:8090，/api 自动代理到后端）
 ```
 
-端口被占用时：`PORT=8091 pnpm dev`、`python starter.py --port 8010`。
+`python starter.py` 首次运行会自动创建虚拟环境；之后仅启动存储 API——前端由 `pnpm dev` 热更新托管。数据保存在 `data/chats.db`（SQLite 单文件，含附件原件），备份即复制该文件；`DATA_DIR` 环境变量可改存储位置。换端口：`--port 8010` / `BACKEND_PORT=8010`（`pnpm dev` 的代理会跟随 `BACKEND_PORT`）。
+
+**生产形态（单端口）**：`pnpm build` 后以默认环境启动 uvicorn——后端同时托管 `dist/` 产物与 API（见 [DEPLOY.md](DEPLOY.md)）。
 
 首次打开时，若浏览器里还留有旧版（IndexedDB 存储）的会话数据，会自动把它们迁移进 SQLite。
 
@@ -82,9 +82,10 @@ API Key 与设置保存在浏览器 localStorage；会话、附件原件与收�
 
 | 命令          | 用途                                          |
 | ------------- | --------------------------------------------- |
-| `pnpm dev`    | 启动前端开发服务器（默认 8090，`/api` 代理到 8000 的后端；可用 `PORT` 覆盖） |
+| `pnpm dev`    | 启动前端开发服务器（默认 8090，`/api` 代理到后端；可用 `PORT` 覆盖） |
+| `pnpm dev:all` | 后端 + 前端开发服务一起启动（Ctrl+C 同时退出） |
 | `pnpm backend` | 启动存储后端（`http://127.0.0.1:8000`，托管 dist 与 /api） |
-| `python starter.py` | 一条命令跑生产形态：venv 自举 + 前端构建 + 起服务 + 开浏览器 |
+| `python starter.py` | 仅启动存储后端（venv 自举，纯 API :8000） |
 | `pnpm build`  | 构建到 `dist/`                                |
 | `pnpm type`   | TypeScript 类型检查                           |
 | `pnpm lint`   | oxlint 检查                                   |

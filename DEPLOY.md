@@ -28,12 +28,12 @@ pnpm build
 python -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 
-# 3) 启动（--host 0.0.0.0 对外监听；无浏览器环境务必 --no-open）
-.venv/bin/python starter.py --host 0.0.0.0 --no-open
+# 3) 启动（默认托管 dist/ 前端产物与 /api；SERVE_DIST=0 可关掉托管只留 API）
+.venv/bin/python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
 
 本地构建、服务器不装 Node 的做法：本地 `pnpm build` 后把 `dist/`、`server/`、`requirements.txt`、
-`starter.py` 上传到服务器同一目录，跳过第 1 步，第 3 步加 `--no-build`。
+`starter.py`（或直接用 uvicorn）上传到服务器同一目录，跳过第 1 步。
 
 浏览器访问 `http://服务器IP:8000`；防火墙/安全组放行 8000。
 

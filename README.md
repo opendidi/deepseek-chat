@@ -17,16 +17,22 @@ pnpm install
 python starter.py
 ```
 
-**Daily use**: `python starter.py` is a single command that bootstraps the venv, builds the front end if needed, and starts the server — the backend serves both the `dist/` build and the storage API at `http://127.0.0.1:8000`. Data lives in `data/chats.db` (a single SQLite file including attachment blobs) — backing up is copying that file; set the `DATA_DIR` environment variable to change the location. Options: `--port 8010` to change the port, `--no-open` to skip the browser.
-
-**Front-end development**: start the two processes in separate terminals —
+**Daily use (front end and back end are separate services)**:
 
 ```sh
-python starter.py --no-open   # terminal 1: storage backend (:8000)
+pnpm dev:all                  # one command: backend API (:8000) + front-end dev server (:8090, /api proxied)
+```
+
+Or run them in separate terminals —
+
+```sh
+python starter.py             # terminal 1: storage backend, pure API on :8000 (no front end served)
 pnpm dev                      # terminal 2: front-end dev server (http://localhost:8090, /api proxied to the backend)
 ```
 
-If ports are taken: `PORT=8091 pnpm dev`, `python starter.py --port 8010`.
+`python starter.py` bootstraps the venv on first run and starts the storage API only — the front end is served by `pnpm dev` with hot reload. Data lives in `data/chats.db` (a single SQLite file including attachment blobs) — backing up is copying that file; set the `DATA_DIR` environment variable to change the location. Options: `--port 8010` / `BACKEND_PORT=8010` to change the backend port (`pnpm dev` follows `BACKEND_PORT` for the proxy).
+
+**Production shape (single port)**: `pnpm build` then start uvicorn without `SERVE_DIST` — the backend serves the `dist/` build and the API together (see [DEPLOY.md](DEPLOY.md)).
 
 On first launch, any existing chat data stored in the browser (previous IndexedDB version) is migrated into SQLite automatically.
 
@@ -82,9 +88,10 @@ Settings → Data → Delete all chats clears all local conversations, original 
 
 | Command       | Description                                             |
 | ------------- | ------------------------------------------------------- |
-| `pnpm dev`    | Start the front-end dev server (port 8090 by default, `/api` proxied to the backend on :8000; `PORT` overrides) |
+| `pnpm dev`    | Start the front-end dev server (port 8090 by default, `/api` proxied to the backend; `PORT` overrides) |
+| `pnpm dev:all` | Start the backend and the front-end dev server together (Ctrl+C stops both) |
 | `pnpm backend` | Start the storage backend (`http://127.0.0.1:8000`, serves dist and /api) |
-| `python starter.py` | Run the production shape in one command: venv bootstrap + front-end build + server + browser |
+| `python starter.py` | Start the storage backend only (venv bootstrap, pure API on :8000) |
 | `pnpm build`  | Build into `dist/`                                      |
 | `pnpm type`   | Run TypeScript type checks                              |
 | `pnpm lint`   | Lint with oxlint                                        |
