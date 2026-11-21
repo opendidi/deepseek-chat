@@ -1,5 +1,12 @@
 /** 由 scripts/generate-scss-types.mjs 生成；样式类名变化后重新运行 pnpm scss:types */
 declare const styles: {
+  readonly amapCard: string
+  readonly amapMapImage: string
+  readonly amapMapLink: string
+  readonly amapPoiAddress: string
+  readonly amapPoiList: string
+  readonly amapRouteMeta: string
+  readonly amapWeather: string
   readonly code: string
   readonly detail: string
   readonly detailLabel: string

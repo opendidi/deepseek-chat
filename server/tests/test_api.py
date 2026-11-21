@@ -170,3 +170,50 @@ def test_access_key_gate(client, monkeypatch):
     monkeypatch.delenv('ACCESS_PASSWORD')
     # 关闭口令后恢复开放
     assert client.get('/api/sessions').status_code == 200
+
+
+def test_staticmap_endpoint(client, monkeypatch):
+    """未配置 AMAP_KEY 时 400；且该端点豁免访问口令（img 无法携带自定义头）"""
+    monkeypatch.setattr('server.amap.AMAP_KEY', '')
+    response = client.get('/api/amap/staticmap', params={'markers': 'mid,0xFF0000:116.397,39.918'})
+    assert response.status_code == 400
+    assert response.json()['detail'] == 'AMAP_KEY_MISSING'
+
+    # 口令开启后图片端点仍可访问（<img> 无法携带 x-access-key 头）
+    monkeypatch.setenv('ACCESS_PASSWORD', 'secret')
+    response = client.get(
+        '/api/amap/staticmap',
+        params={'markers': 'mid,0xFF0000:116.397,39.918'},
+    )
+    assert response.status_code == 400  # 无 Key 仍是 400 而非 401，证明已豁免口令
+
+    # 配置 Key 后应返回 PNG（替身上游验证透传与响应头）
+    monkeypatch.setattr('server.amap.AMAP_KEY', 'test-key')
+    monkeypatch.setattr(
+        'server.amap.urllib.request.urlopen',
+        _FakeStaticmapUpstream(),
+    )
+    response = client.get(
+        '/api/amap/staticmap',
+        params={'markers': 'mid,0xFF0000:116.397,39.918'},
+    )
+    assert response.status_code == 200
+    assert response.headers['content-type'].startswith('image/png')
+    assert response.headers['x-content-type-options'] == 'nosniff'
+
+
+class _FakeStaticmapUpstream:
+    """替身上游：staticmap 请求返回固定 PNG 字节"""
+
+    def __call__(self, request, timeout=None):
+        import io
+        import types
+
+        class _FakeResponse(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.close()
+
+        return _FakeResponse(b'png-fake-bytes')

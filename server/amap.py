@@ -54,6 +54,24 @@ def _require_amap_key() -> None:
         raise AmapError('AMAP_KEY_MISSING')
 
 
+def static_map(
+    markers: str,
+    location: str | None = None,
+    zoom: int = 13,
+    size: str = '540*320',
+) -> bytes:
+    """静态地图出图：按标记与中心点渲染 PNG 字节（供聊天中的地图卡片显示）"""
+    if not AMAP_KEY:
+        raise AmapError('AMAP_KEY_MISSING')
+    params = {'markers': markers, 'zoom': str(zoom), 'size': size}
+    if location:
+        params['location'] = location
+    query = urllib.parse.urlencode({'key': AMAP_KEY, **params})
+    request = urllib.request.Request(f'{AMAP_BASE}/v3/staticmap?{query}')
+    with urllib.request.urlopen(request, timeout=AMAP_TIMEOUT) as response:
+        return response.read()
+
+
 def place_search(keywords: str, city: str | None = None) -> dict:
     _require_amap_key()
     data = _amap_get('/v3/place/text', {'keywords': keywords, 'city': city, 'offset': 5, 'page': 1})
@@ -112,6 +130,8 @@ def route_planning(origin_address: str, destination_address: str, mode: str = 'd
         'mode': mode,
         'origin': origin_address,
         'destination': destination_address,
+        'origin_point': origin_point,
+        'destination_point': destination_point,
         'distance_meters': int(float(best.get('distance') or 0)),
         'duration_seconds': int(float(best.get('duration') or 0)),
         'steps': steps[:6],

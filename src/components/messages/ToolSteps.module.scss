@@ -106,3 +106,62 @@
   margin: 0;
   overflow-y: auto;
 }
+
+/* amap 地图卡片：静态地图图 + POI 列表 / 路线摘要 */
+.amapCard {
+  margin-top: 8px;
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.amapMapLink {
+  display: block;
+}
+
+.amapMapImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.amapPoiList {
+  margin: 0;
+  padding: 6px 10px;
+  list-style: none;
+
+  li {
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+  }
+
+  a {
+    color: var(--dsw-alias-brand-text);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.amapPoiAddress {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.amapRouteMeta {
+  display: flex;
+  gap: 16px;
+  padding: 6px 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
+.amapWeather {
+  padding: 6px 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}

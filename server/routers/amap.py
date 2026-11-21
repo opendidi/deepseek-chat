@@ -7,9 +7,9 @@ Key 保存在服务器环境（AMAP_KEY，可由根目录 .env 提供），浏�
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
-from ..amap import AmapError, geocode, place_search, route_planning, weather
+from ..amap import AmapError, geocode, place_search, route_planning, static_map, weather
 
 router = APIRouter(prefix='/api/amap', tags=['amap'])
 
@@ -48,6 +48,25 @@ def amap_route(
         return JSONResponse(route_planning(origin, destination, mode))
     except AmapError as error:
         return _amap_error_response(error)
+
+
+@router.get('/staticmap')
+def amap_staticmap(
+    markers: str = Query(...),
+    location: str = Query(default=''),
+    zoom: int = Query(default=13, ge=1, le=20),
+    size: str = Query(default='540*320'),
+) -> Response:
+    """静态地图出图：PNG 供聊天中的地图卡片以 <img> 显示（该端点豁免访问口令）"""
+    try:
+        png = static_map(markers, location or None, zoom, size)
+    except AmapError as error:
+        return JSONResponse({'detail': str(error)}, status_code=400)
+    return Response(
+        content=png,
+        media_type='image/png',
+        headers={'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff'},
+    )
 
 
 def _amap_error_response(error: AmapError) -> JSONResponse:
