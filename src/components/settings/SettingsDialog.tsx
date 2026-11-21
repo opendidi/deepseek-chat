@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { errorStatus, SettingCell, SettingSwitch, type Status } from './settingsShared.js'
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   IconChartOutline16,
   IconDarkOutline16,
@@ -21,6 +21,7 @@ import {
   exportHistory,
   importHistory,
 } from '../../services/chat/backup.js'
+import type { ClientTool, ToolCategory } from '../../services/agent/tools.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, loadProvinces, type ProvinceOption } from '../../services/location.js'
@@ -678,61 +679,69 @@ const TOOL_CATEGORY_KEYS = {
   workspace: 'toolCategoryWorkspace',
 } as const
 
-/** 按工具粒度授权，读取页面内容的工具默认关闭 */
+/** 按工具粒度授权；工具按分类分块展示，读取页面内容的工具默认关闭 */
 const AgentToolSettings = () => {
   const t = useTranslate()
   const enabled = useSettings((state) => state.enabledToolNames)
-  return (
-    <div className={styles.cell}>
-      <div className={styles.label}>{t('settingsAgentToolsTitle')}</div>
-      <div className={styles.description}>{t('settingsAgentToolsDesc')}</div>
-      {TOOL_REGISTRY.map((tool) => (
-        <SettingSwitch
-          key={tool.name}
-          label={t(TOOL_LABEL_KEYS[tool.name] ?? 'settingsAgentToolsTitle')}
-          description={
-            tool.requiresConsent
-              ? `${t(TOOL_CATEGORY_KEYS[tool.category])} · ${t('toolRequiresConsent')}`
-              : t(TOOL_CATEGORY_KEYS[tool.category])
-          }
-          checked={enabled.includes(tool.name)}
-          onChange={(value) => toggleToolName(tool.name, value)}
-        />
-      ))}
-      <AmapKeySetting />
-    </div>
-  )
-}
-
-/** 高德开放平台 Web 服务 Key：地图类 Agent 工具（地点搜索 / 天气 / 路线）的凭据 */
-const AmapKeySetting = () => {
-  const t = useTranslate()
   const amapKey = useSettings((state) => state.amapKey)
-  const [value, setValue] = useState(amapKey)
-  const commit = () => {
-    if (value.trim() !== amapKey) {
-      setAmapKey(value)
+  const [keyDraft, setKeyDraft] = useState(amapKey)
+  // 按分类分组，保持注册表顺序
+  const groups = useMemo(() => {
+    const map = new Map<ToolCategory, ClientTool[]>()
+    for (const tool of TOOL_REGISTRY) {
+      const list = map.get(tool.category) ?? []
+      list.push(tool)
+      map.set(tool.category, list)
+    }
+    return [...map.entries()]
+  }, [])
+  const commitKey = () => {
+    if (keyDraft.trim() !== amapKey) {
+      setAmapKey(keyDraft)
     }
   }
   return (
     <div className={styles.cell}>
-      <div className={styles.label}>{t('settingsAmapKey')}</div>
-      <div className={styles.description}>{t('settingsAmapKeyDesc')}</div>
-      <input
-        type="text"
-        className={styles.textInput}
-        autoComplete="off"
-        spellCheck={false}
-        placeholder="在高德开放平台创建「Web 服务」Key 后粘贴"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            commit()
-          }
-        }}
-      />
+      <div className={styles.label}>{t('settingsAgentToolsTitle')}</div>
+      <div className={styles.description}>{t('settingsAgentToolsDesc')}</div>
+      {groups.map(([category, tools]) => (
+        <div key={category} className={styles.toolGroup}>
+          <div className={styles.toolGroupTitle}>{t(TOOL_CATEGORY_KEYS[category])}</div>
+          {tools.map((tool) => (
+            <SettingSwitch
+              key={tool.name}
+              label={t(TOOL_LABEL_KEYS[tool.name] ?? 'settingsAgentToolsTitle')}
+              description={
+                tool.requiresConsent ? `${t(TOOL_CATEGORY_KEYS[tool.category])} · ${t('toolRequiresConsent')}` : undefined
+              }
+              checked={enabled.includes(tool.name)}
+              onChange={(value) => toggleToolName(tool.name, value)}
+            />
+          ))}
+          {category === 'map' ? (
+            <div className={styles.amapKeyBlock}>
+              <div className={clsx(styles.description, styles.amapKeyHint)}>
+                {t('settingsAmapKeyDesc')}
+              </div>
+              <input
+                type="text"
+                className={styles.textInput}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="在高德开放平台创建「Web 服务」Key 后粘贴"
+                value={keyDraft}
+                onChange={(event) => setKeyDraft(event.target.value)}
+                onBlur={commitKey}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    commitKey()
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+      ))}
     </div>
   )
 }

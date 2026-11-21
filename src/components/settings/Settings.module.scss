@@ -70,6 +70,34 @@
   overflow-y: auto;
 }
 
+.toolGroup {
+  padding-top: 14px;
+  margin-top: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+
+  &:first-of-type {
+    padding-top: 4px;
+    border-top: none;
+    margin-top: 0;
+  }
+}
+
+.toolGroupTitle {
+  margin-bottom: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.amapKeyBlock {
+  padding: 8px 0 4px;
+
+  .amapKeyHint {
+    margin-bottom: 8px;
+  }
+}
+
 .cell {
   box-sizing: border-box;
   flex-shrink: 0;

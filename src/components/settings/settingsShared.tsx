@@ -58,7 +58,7 @@ export const SettingSwitch = ({
   onChange,
 }: {
   label: string
-  description: string
+  description?: string
   checked: boolean
   onChange: (value: boolean) => void
 }) => (

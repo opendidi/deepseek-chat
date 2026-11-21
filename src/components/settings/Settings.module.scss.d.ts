@@ -1,5 +1,7 @@
 /** 由 scripts/generate-scss-types.mjs 生成；样式类名变化后重新运行 pnpm scss:types */
 declare const styles: {
+  readonly amapKeyBlock: string
+  readonly amapKeyHint: string
   readonly apiKey: string
   readonly apiKeyInput: string
   readonly apiKeyMask: string
@@ -45,6 +47,8 @@ declare const styles: {
   readonly themeOption: string
   readonly themeOptionSelected: string
   readonly themeOptions: string
+  readonly toolGroup: string
+  readonly toolGroupTitle: string
   readonly uploadButton: string
   readonly usageBar: string
   readonly usageBarColumn: string
