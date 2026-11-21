@@ -151,11 +151,46 @@ export const normalizeDay = (value: unknown): LedgerDay => {
   return day
 }
 
+// 内存缓存：400 天账本的 read+parse+stringify+write 不必每次记账都全量执行；
+// 写入合并为 500ms 防抖，页面隐藏/关闭时立即冲刷（统计数据可容忍极小的丢失窗口）
+let cache: UsageLedger | null = null
+let writeTimer: ReturnType<typeof setTimeout> | undefined
+
+const flushLedger = () => {
+  if (cache === null) {
+    return
+  }
+  const dates = Object.keys(cache).sort()
+  const trimmed: UsageLedger = {}
+  for (const date of dates.slice(-MAX_LEDGER_DAYS)) {
+    trimmed[date] = cache[date]
+  }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(trimmed))
+  } catch {
+    // 存储不可用时只影响本机用量统计
+  }
+}
+
+if (typeof window !== 'undefined') {
+  // 与会话落盘同一策略：pagehide / 切后台是最后的落盘机会
+  window.addEventListener('pagehide', flushLedger)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushLedger()
+    }
+  })
+}
+
 export const readLedger = (): UsageLedger => {
+  if (cache !== null) {
+    return cache
+  }
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {}
+      cache = {}
+      return cache
     }
     const result: UsageLedger = {}
     for (const [date, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -164,23 +199,19 @@ export const readLedger = (): UsageLedger => {
       }
       result[date] = normalizeDay(value)
     }
-    return result
+    cache = result
+    return cache
   } catch {
-    return {}
+    // 账本损坏或存储不可用：按空账本处理，下次写入会重建
+    cache = {}
+    return cache
   }
 }
 
 const writeLedger = (ledger: UsageLedger) => {
-  const dates = Object.keys(ledger).sort()
-  const trimmed: UsageLedger = {}
-  for (const date of dates.slice(-MAX_LEDGER_DAYS)) {
-    trimmed[date] = ledger[date]
-  }
-  try {
-    localStorage.setItem(KEY, JSON.stringify(trimmed))
-  } catch {
-    // 存储不可用时只影响本机用量统计
-  }
+  cache = ledger
+  clearTimeout(writeTimer)
+  writeTimer = setTimeout(flushLedger, 500)
 }
 
 const withDay = (date: string, update: (day: LedgerDay) => void) => {
@@ -233,6 +264,7 @@ export const readTodayUsage = (): TodayUsage => {
       pageFetch: num(raw.pageFetch),
     }
   } catch {
+    // 旧版/损坏的今日记录按空处理，写入时会重建
     return empty
   }
 }
@@ -252,6 +284,7 @@ export const checkDailyQuota = (quota: number): { cost: number } | null => {
     }
     localStorage.setItem(REMINDED_KEY, today.date)
   } catch {
+    // 存储不可用时放弃本次提醒，不影响对话
     return null
   }
   return { cost: today.cost }
@@ -380,23 +413,6 @@ export const ledgerInRange = (
   }, emptyExtra())
 }
 
-/** 范围内 24 小时请求数，供账本导出与额度核对 */
-export const ledgerHours = (
-  ledger: UsageLedger,
-  dates: readonly string[]
-): number[] => {
-  const allowed = new Set(dates)
-  const hours = Array<number>(HOURS).fill(0)
-  for (const [date, day] of Object.entries(ledger)) {
-    if (!allowed.has(date)) {
-      continue
-    }
-    for (let hour = 0; hour < HOURS; hour += 1) {
-      hours[hour] += day.hours[hour] ?? 0
-    }
-  }
-  return hours
-}
 
 export type LedgerSessionRecord = LedgerSessionUsage & { id: string }
 
@@ -424,9 +440,6 @@ export const ledgerSessions = (
   return [...result.values()].sort((a, b) => b.lastAt - a.lastAt)
 }
 
-/** 今天的账本用量，用于每日额度提醒；与统计范围无关 */
-export const ledgerToday = (ledger: UsageLedger, date: string): LedgerExtra =>
-  ledgerInRange(ledger, [date])
 
 /** 清除单条上下文记录（所有日期里的该会话） */
 export const clearLedgerSession = (id: string) => {
@@ -489,6 +502,8 @@ export const hideAllRecords = (ids: readonly string[]) => {
 }
 
 export const clearLedger = () => {
+  // 内存缓存一并清空：否则防抖冲刷会把旧账本写回去
+  cache = {}
   try {
     localStorage.removeItem(KEY)
     localStorage.removeItem(HIDDEN_KEY)

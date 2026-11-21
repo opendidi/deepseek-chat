@@ -7,5 +7,9 @@ export const maskApiKey = (key: string | null | undefined): string => {
     return '—'
   }
   const trimmed = key.trim()
-  return trimmed ? `sk-****${trimmed.slice(-4)}` : '—'
+  if (!trimmed) {
+    return '—'
+  }
+  // 过短的 Key 末四位即整个 Key，直接整体隐藏
+  return trimmed.length < 8 ? 'sk-****' : `sk-****${trimmed.slice(-4)}`
 }

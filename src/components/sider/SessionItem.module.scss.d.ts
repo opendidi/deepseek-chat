@@ -2,8 +2,12 @@
 declare const styles: {
   readonly action: string
   readonly active: string
+  readonly checkbox: string
+  readonly checkboxChecked: string
   readonly item: string
   readonly renameInput: string
+  readonly selectable: string
+  readonly selected: string
   readonly title: string
 }
 export = styles

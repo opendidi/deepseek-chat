@@ -8,6 +8,14 @@ build/
 .DS_Store
 .workbuddy/
 .env
+.zcode/
 .env.*
 !.env.example
 tmp/
+
+# 存储后端
+.venv/
+data/
+__pycache__/
+*.pyc
+.pytest_cache/

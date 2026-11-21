@@ -49,6 +49,40 @@
   line-height: 18px;
 }
 
+/* 多选模式：左侧圆形复选框，选中后标题加重 */
+.selectable {
+  user-select: none;
+}
+
+.checkbox {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  border: 1.5px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  color: transparent;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.checkboxChecked {
+  border-color: var(--dsw-alias-brand-primary);
+  background-color: var(--dsw-alias-brand-primary);
+  color: #fff;
+}
+
+.selected .title {
+  font-weight: 600;
+}
+
 /*
  * 操作区始终占位：只用透明度/可见性控制显隐。
  * 若用 display:none，鼠标移出列表项时锚点会变成零矩形，浮层定位会跳到视口左上角。

@@ -41,7 +41,8 @@ export const describeReply = (reply: AssistantMessage): Notice | null => {
       case 'serverBusy':
         return { text: translate('completionServerBusyToast') }
       default:
-        return message ? { text: message } : null
+        // 服务端原文可能含内部路径或堆栈：只展示本地化通用文案，原文留在网络面板里排查
+        return { text: translate('replyErrorGeneric') }
     }
   }
   const template = getTemplateText(reply)

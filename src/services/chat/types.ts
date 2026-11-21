@@ -78,6 +78,9 @@ export type ToolStep = {
   status: 'pending' | 'running' | 'done' | 'error'
   result?: string
   isError?: boolean
+  /** 执行起止时间，用于步骤耗时与统计聚合 */
+  startedAt?: number
+  endedAt?: number
 }
 
 /**
@@ -107,8 +110,12 @@ export type AssistantMessage = MessageBranch & {
   toolSteps?: ToolStep[]
   stopReason?: StopReason
   stopDetails?: StopDetails
-  /** 最近一次请求的用量，续写后更新 */
+  /** 全部工具往返轮次累加后的用量；续写后更新 */
   usage?: MessageUsage
+  /** 每轮请求的用量明细，用于核对多轮 Agent 的实际请求数 */
+  usageRounds?: MessageUsage[]
+  /** 本条回答实际发起的请求轮数（含工具往返）；缺省按 1 处理 */
+  requestCount?: number
   error?: {
     /** upload：发送前补传附件失败，请求没有发出 */
     kind: ApiErrorKind | 'upload'

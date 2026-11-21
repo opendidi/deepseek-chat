@@ -68,26 +68,41 @@ export const ReplyArea = memo(function ReplyArea({
   useTranslate()
   const [open, setOpen] = useState(true)
   const titleActive = streaming && !hasResponse
-  useTicker(titleActive, 1000)
   if (view.steps.length === 0 && !(message.thinking && streaming)) {
     return null
   }
   // 未记录请求开关时，按是否有思考内容显示标题。
   const thinking = message.thinking ?? view.steps.some((step) => step.type === 'thinking')
-  const title = thinking ? getAreaTitle(view, streaming, Date.now(), hasResponse) : null
   const stopped = !streaming && !hasResponse
   return (
     <div className={styles.area}>
-      {title ? (
-        <div className={styles.title} onClick={() => setOpen((value) => !value)}>
+      {thinking ? (
+        <div
+          className={styles.title}
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || (event.key === ' ' && !event.nativeEvent.isComposing)) {
+              event.preventDefault()
+              setOpen((value) => !value)
+            }
+          }}
+        >
           <span className={clsx(styles.titleIcon, stopped && styles.stoppedIcon)}>
             <IconThinkOutline16 />
           </span>
-          <span className={clsx(styles.titleText, titleActive && styles.shimmer)}>{title}</span>
+          <AreaTitleText
+            view={view}
+            streaming={streaming}
+            hasResponse={hasResponse}
+            active={titleActive}
+          />
           {open ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
         </div>
       ) : null}
-      {open || !title ? (
+      {open || !thinking ? (
         <div className={styles.steps}>
           {view.steps.map((step, index) => (
             <StepItem
@@ -105,12 +120,32 @@ export const ReplyArea = memo(function ReplyArea({
   )
 })
 
+/** 标题文本叶子组件：每秒刷新只发生在这里，不再牵动整棵 ReplyArea */
+const AreaTitleText = ({
+  view,
+  streaming,
+  hasResponse,
+  active,
+}: {
+  view: ReplyView
+  streaming: boolean
+  hasResponse: boolean
+  active: boolean
+}) => {
+  useTicker(active, 1000)
+  return (
+    <span className={clsx(styles.titleText, active && styles.shimmer)}>
+      {getAreaTitle(view, streaming, Date.now(), hasResponse)}
+    </span>
+  )
+}
+
 const stepKey = (step: Step, index: number) =>
   step.type === 'thinking' || step.type === 'text' || step.type === 'search'
     ? step.key
     : `${step.type}-${index}`
 
-const StepItem = ({
+const StepItem = memo(function StepItem({
   step,
   message,
   sources,
@@ -122,7 +157,7 @@ const StepItem = ({
   sources: Source[]
   streaming: boolean
   isLast: boolean
-}) => {
+}) {
   switch (step.type) {
     case 'thinking': {
       const lastBlock = step.blocks.at(-1)
@@ -162,7 +197,7 @@ const StepItem = ({
     default:
       return null
   }
-}
+})
 
 /** 思考或过程性文字：左侧圆点 + 竖线，小号 markdown */
 const ContentItem = ({
@@ -252,7 +287,20 @@ const SearchRow = ({
         clickable && styles.clickable,
         active && styles.active
       )}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-expanded={clickable ? active : undefined}
       onClick={clickable ? () => toggleSearchPanel(panelEntry, step.results) : undefined}
+      onKeyDown={
+        clickable
+          ? (event) => {
+              if (event.key === 'Enter' || (event.key === ' ' && !event.nativeEvent.isComposing)) {
+                event.preventDefault()
+                toggleSearchPanel(panelEntry, step.results)
+              }
+            }
+          : undefined
+      }
     >
       <span className={styles.rowIcon}>
         {failed ? <IconSearchWarningOutline16 /> : <IconSearchOutline16 />}

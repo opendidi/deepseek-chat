@@ -172,7 +172,16 @@ export const AssistantMessage = memo(function AssistantMessage({
       {!streaming && !refused && view.searchResults.length > 0 ? (
         <div
           className={clsx(styles.summary, summaryActive && styles.summaryActive)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={summaryActive}
           onClick={() => toggleSearchPanel(summaryEntry, view.searchResults)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || (event.key === ' ' && !event.nativeEvent.isComposing)) {
+              event.preventDefault()
+              toggleSearchPanel(summaryEntry, view.searchResults)
+            }
+          }}
         >
           <SiteThumbnails sources={view.searchResults} />
           <span>

@@ -1,6 +1,8 @@
 import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  IconChartOutline16,
+  IconEllipsisOutline16,
   IconGlobeLanguageOutline14,
   IconNotebookOutline16,
   IconPaperclipOutline16,
@@ -8,6 +10,7 @@ import {
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
+import { Menu, type MenuOption } from '../base/Menu.js'
 import { setChatModel, setSearch, setThinking, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
@@ -45,7 +48,8 @@ import { PromptMenu } from './PromptMenu.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { EmojiButton } from './EmojiButton.js'
-import { SessionStatsButton } from './SessionStats.js'
+import { SessionStatsButton, SessionStatsModalHost, openSessionStats } from './SessionStats.js'
+import { ChatModePicker, chatModeMenuOptions } from './ChatModePicker.js'
 import { Spectrum } from './Spectrum.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ChatInput.module.scss'
@@ -61,11 +65,17 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const draft = useDrafts((state) => state.drafts.get(sessionId) ?? EMPTY_DRAFT)
   const { text, attachments } = draft
   const setText = (value: string) => setDraftText(sessionId, value)
-  const draftReady = useUploads((state) => prepareDraftMessage(draft, state.tasks) !== null)
+  // 纯 selector 反模式修正：计算放 useMemo，selector 只取数据
+  const uploadTasks = useUploads((state) => state.tasks)
+  const draftReady = useMemo(
+    () => prepareDraftMessage(draft, uploadTasks) !== null,
+    [draft, uploadTasks]
+  )
   const streaming = useChatStore(
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
   const thinking = useSettings((state) => state.thinking)
+  const chatMode = useSettings((state) => state.chatMode)
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
@@ -255,6 +265,13 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     })
   }
 
+  /** 移动端「更多」菜单：把低频入口（聊天模式 / 提示词库 / 会话统计）收起来，工具行只留高频操作 */
+  const moreOptions: MenuOption[] = [
+    ...chatModeMenuOptions(t, chatMode),
+    { key: 'prompts', label: t('promptLibrary'), icon: <IconNotebookOutline16 />, onSelect: openPromptLibrary },
+    { key: 'stats', label: t('sessionStatsTooltip'), icon: <IconChartOutline16 />, onSelect: openSessionStats },
+  ]
+
   /** 斜杠菜单打开时优先处理 ↑/↓/Enter/Esc，都不再进输入历史与发送流程 */
   const slashMenuKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (!slashOpen || !slashMatches || event.nativeEvent.isComposing) {
@@ -427,14 +444,31 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           <ModelPicker chatModel={chatModel} onPick={setChatModel} />
         </div>
         <div className={styles.right}>
-          <SessionStatsButton disabled={importingHistory} />
-          <IconButton
-            icon={<IconNotebookOutline16 />}
-            tooltip={t('promptLibrary')}
-            ariaLabel={t('promptLibrary')}
-            disabled={importingHistory}
-            onClick={openPromptLibrary}
-          />
+          {isMobile ? (
+            <Menu options={moreOptions}>
+              {({ toggle, ...triggerProps }) => (
+                <IconButton
+                  icon={<IconEllipsisOutline16 />}
+                  tooltip={t('more')}
+                  ariaLabel={t('more')}
+                  onClick={toggle}
+                  {...triggerProps}
+                />
+              )}
+            </Menu>
+          ) : (
+            <>
+              <ChatModePicker />
+              <SessionStatsButton disabled={importingHistory} />
+              <IconButton
+                icon={<IconNotebookOutline16 />}
+                tooltip={t('promptLibrary')}
+                ariaLabel={t('promptLibrary')}
+                disabled={importingHistory}
+                onClick={openPromptLibrary}
+              />
+            </>
+          )}
           <EmojiButton disabled={importingHistory} onSelect={insertAtCursor} />
           <VoiceButton
             status={voice.status}
@@ -493,6 +527,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             </button>
           )}
         </div>
+        {/* 弹窗与入口按钮解耦：移动端从「更多」菜单打开时按钮并不渲染 */}
+        <SessionStatsModalHost />
       </div>
       {dragging ? <DragMask /> : null}
     </div>

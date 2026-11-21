@@ -1,9 +1,12 @@
 import { formatDate } from '../../utils/format.js'
 import * as db from './db.js'
 import { replaceHistory, useChatStore } from './store.js'
+import { fail } from './history/errors.js'
+import { MAX_ENCRYPTED_ARCHIVE_BYTES } from './history/zipReader.js'
 import type { Session } from './types.js'
 
 export { BackupError } from './history/errors.js'
+export { MAX_ENCRYPTED_ARCHIVE_BYTES } from './history/zipReader.js'
 export { ArchiveDecryptError } from './history/crypto.js'
 
 // 导入、导出与全部删除串行处理，避免读取归档时数据被清空或两个替换事务交错。
@@ -60,6 +63,10 @@ export const archiveIsEncrypted = (file: File): Promise<boolean> =>
  */
 export const importHistory = (file: File, password?: string): Promise<number> =>
   enqueueBackup(async () => {
+    // 加密容器在解密前没有任何大小校验，必须在这里提前挡住超大文件
+    if (file.size > MAX_ENCRYPTED_ARCHIVE_BYTES) {
+      fail('historyImportTooLarge')
+    }
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
     const { isEncryptedArchive, decryptArchive } = await import('./history/crypto.js')
     let source = file

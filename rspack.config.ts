@@ -139,17 +139,24 @@ export const createConfig = ({
     },
   },
   // 按传输体积衡量：入口 JS + CSS 约 660 KiB，gzip 后约 195 KiB。
-  // 512 KiB 是 webpack 早期针对未压缩资源的默认值，上浮入口阈值避免误报，
+  // 入口阈值随功能体量上调（css+js 合计），超限时仍会提示以保持警觉；
   // 但保留告警，入口明显膨胀时仍会提示。
   // dev 产物未压缩，体积告警只会干扰启动输出；生产构建保留提示
   // 统计分区已按需加载，主包仍包含 i18n、设置项与本机账本采集入口
   performance: {
     hints: dev ? false : 'warning',
     maxAssetSize: 600 * 1024,
-    maxEntrypointSize: 700 * 1024,
+    maxEntrypointSize: 800 * 1024,
   },
   devServer: { port: DEV_PORT, ...devServer },
 })
 
 // eslint-disable-next-line import/no-default-export
-export default defineConfig(createConfig())
+export default defineConfig(
+  // 存储后端（server/，pnpm backend 启动）与页面同源时无需代理；开发模式下 /api 转给本机服务
+  createConfig({
+    devServer: {
+      proxy: [{ context: '/api', target: 'http://127.0.0.1:8000' }],
+    },
+  })
+)

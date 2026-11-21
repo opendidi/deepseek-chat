@@ -45,3 +45,64 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.duration {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailToggle {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-brand-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  flex-basis: 100%;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background-color: var(--dsw-alias-bg-base);
+}
+
+.detailLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detailLabel {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.code,
+.resultFull {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+}
+
+.resultFull {
+  max-height: 220px;
+  margin: 0;
+  overflow-y: auto;
+}

@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+.test-build
+.venv
+data
+.git
+.github
+*.log
+.DS_Store
+.env
+.env.*

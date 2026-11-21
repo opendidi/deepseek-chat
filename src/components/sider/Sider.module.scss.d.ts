@@ -7,6 +7,7 @@ declare const styles: {
   readonly drawer: string
   readonly drawerMask: string
   readonly list: string
+  readonly listWithHeader: string
   readonly listWrap: string
   readonly mobile: string
   readonly newChat: string
@@ -16,6 +17,12 @@ declare const styles: {
   readonly searchWrap: string
   readonly section: string
   readonly sectionHeader: string
+  readonly selectToggle: string
+  readonly selectionAction: string
+  readonly selectionActions: string
+  readonly selectionDanger: string
+  readonly selectionDivider: string
+  readonly selectionHeader: string
   readonly settings: string
   readonly settingsIcon: string
   readonly settingsLabel: string

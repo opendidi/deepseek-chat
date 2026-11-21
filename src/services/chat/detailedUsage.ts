@@ -4,13 +4,20 @@
  * 账本只记聚合数字，不参与 token 明细的双算。
  */
 import { formatDate } from '../../utils/format.js'
+import { DAY_MS } from '../../utils/time.js'
 import { heatWindowDates, percent } from '../../utils/usageChart.js'
 import { BUILTIN_MODELS, modelDisplayName } from '../models.js'
 import { useSettings } from '../settings.js'
 import { readActiveSessionId } from './activeSession.js'
 import * as db from './db.js'
-import { BASE_SYSTEM_PROMPT, toolDefinitionText } from './requestShape.js'
-import type { Message } from './types.js'
+import { systemPromptFor } from './requestShape.js'
+import {
+  resolveChatTools,
+  summarizeToolSteps,
+  toolDefinitionText,
+  type ToolStats,
+} from '../agent/toolPolicy.js'
+import type { Message, ToolStep } from './types.js'
 import {
   ledgerInRange,
   ledgerSessions,
@@ -32,7 +39,6 @@ import {
 } from './usagePricing.js'
 import { RANGE_DAYS, usageDates, type UsageRange } from './usageRange.js'
 
-const DAY = 86_400_000
 
 export type CompositionKey =
   | 'usageCompositionMiss'
@@ -134,6 +140,8 @@ export type DetailedUsage = {
   context: ContextInfo
   contextRecords: ContextRecord[]
   currentSession: CurrentSessionUsage
+  /** 工具调用次数、失败率、耗时与按工具分布 */
+  tools: ToolStats
   /** 独立于 400 天账本的今日聚合 */
   today: TodayUsage
   ledger: UsageLedger
@@ -158,6 +166,7 @@ const jsonText = (value: unknown): string => {
   try {
     return JSON.stringify(value) ?? ''
   } catch {
+    // 循环引用等极端值放弃序列化，只影响展示不影响统计
     return ''
   }
 }
@@ -172,9 +181,9 @@ const shareItems = (
 /** 当前会话最近一轮请求的上下文分类：按字符权重估算，仅用于展示 */
 const contextCategories = (
   messages: readonly Message[],
-  search: boolean,
-  agentTools: boolean,
-  systemPrompt: string
+  definitionText: string,
+  systemPrompt: string,
+  baseSystemPrompt: string
 ): ShareItem[] => {
   const lastAssistantIndex = messages.findLastIndex((item) => item.role === 'assistant')
   const assistant = lastAssistantIndex >= 0 ? messages[lastAssistantIndex] : undefined
@@ -205,12 +214,12 @@ const contextCategories = (
     {
       key: 'usageContextCategorySystem',
       tokens: estimateTokens(
-        [BASE_SYSTEM_PROMPT, systemPrompt, assistant?.role === 'assistant' ? assistant.latestReminder : '']
+        [baseSystemPrompt, systemPrompt, assistant?.role === 'assistant' ? assistant.latestReminder : '']
           .filter(Boolean)
           .join('\n\n')
       ),
     },
-    { key: 'usageContextCategoryTools', tokens: estimateTokens(toolDefinitionText(search, agentTools)) },
+    { key: 'usageContextCategoryTools', tokens: estimateTokens(definitionText) },
     { key: 'usageContextCategoryUser', tokens: estimateTokens(user?.role === 'user' ? user.content : '') },
     { key: 'usageContextCategoryReply', tokens: estimateTokens(textOf('text')) },
     { key: 'usageContextCategoryThinking', tokens: estimateTokens(textOf('thinking')) },
@@ -257,7 +266,7 @@ export const collectDetailedUsage = async (
   const dates = usageDates(range, now)
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
-  const start = today.getTime() - (RANGE_DAYS[range] - 1) * DAY
+  const start = today.getTime() - (RANGE_DAYS[range] - 1) * DAY_MS
   const allowed = new Set(dates)
 
   const last7Dates = usageDates('7d', now)
@@ -292,6 +301,14 @@ export const collectDetailedUsage = async (
   const hourly = Array<number>(24).fill(0)
   const activeId = readActiveSessionId()
   const settings = useSettings.getState()
+  const policy = resolveChatTools({
+    mode: settings.chatMode,
+    search: settings.search,
+    agentTools: settings.agentTools,
+    enabledTools: new Set(settings.enabledToolNames),
+    locale: settings.locale,
+  })
+  const toolSteps: ToolStep[] = []
   const currentOutputs: number[] = []
   const currentComposition = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 }
   let currentWebSearch = 0
@@ -388,9 +405,13 @@ export const collectDetailedUsage = async (
       if (message.createdAt < start) {
         continue
       }
+      if (message.toolSteps) {
+        toolSteps.push(...message.toolSteps)
+      }
       totals.cost += cost
       totals.replies += 1
-      totals.modelCalls += 1
+      // 一条回答可能包含多轮工具往返，按实际请求轮数统计
+      totals.modelCalls += message.requestCount ?? 1
       totals.input += input
       totals.cacheWrite += cacheWrite
       totals.cacheRead += cacheRead
@@ -499,7 +520,13 @@ export const collectDetailedUsage = async (
     daily: [...dailyMap.values()],
     hourly,
     composition,
-    contextBreakdown: contextCategories(activeMessages, settings.search, settings.agentTools, settings.systemPrompt),
+    contextBreakdown: contextCategories(
+      activeMessages,
+      toolDefinitionText(policy.tools),
+      settings.systemPrompt,
+      systemPromptFor(settings.locale)
+    ),
+    tools: summarizeToolSteps(toolSteps),
     byModel: [...modelMap.values()].sort((a, b) => b.tokens - a.tokens),
     bySession: [...sessionMap.values()].sort((a, b) => b.tokens - a.tokens).slice(0, 10),
     heatmap: heatDates.map((date) => heatMap.get(date) ?? { date, tokens: 0, cost: 0, replies: 0 }),

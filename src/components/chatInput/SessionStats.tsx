@@ -1,5 +1,6 @@
 /** 输入栏的会话统计弹窗：打开时按需聚合，与设置 → 统计共用同一份数据 */
 import { useEffect, useState } from 'react'
+import { create } from 'zustand'
 import { useTranslate } from '../../i18n/index.js'
 import { useSettings } from '../../services/settings.js'
 import { collectDetailedUsage, type DetailedUsage } from '../../services/chat/detailedUsage.js'
@@ -11,28 +12,32 @@ import { Modal } from '../base/Modal.js'
 import { DonutChart, DonutLegend, PressureMeter, Sparkline } from '../usage/UsageVisuals.js'
 import styles from './SessionStats.module.scss'
 
-const COMPOSITION_COLORS = [
-  'var(--dsw-alias-brand-primary)',
-  'var(--dsw-static-blue-300)',
-  'var(--dsw-static-amber-400)',
-  'var(--dsw-static-green-400)',
-]
+import { COMPOSITION_COLORS } from '../settings/usage/sections.js'
 
+// 开关独立成 store：移动端从「更多」菜单打开时按钮本身不渲染，弹窗也要能弹
+const useSessionStatsOpen = create(() => ({ open: false }))
+
+/** 打开会话统计弹窗（桌面按钮与移动端「更多」菜单共用） */
+export const openSessionStats = () => useSessionStatsOpen.setState({ open: true })
+
+/** 桌面端工具行的入口按钮 */
 export const SessionStatsButton = ({ disabled = false }: { disabled?: boolean }) => {
   const t = useTranslate()
-  const [opened, setOpened] = useState(false)
   return (
-    <>
-      <IconButton
-        icon={<IconChartOutline16 />}
-        tooltip={t('sessionStatsTooltip')}
-        ariaLabel={t('sessionStatsTooltip')}
-        disabled={disabled}
-        onClick={() => setOpened(true)}
-      />
-      {opened ? <SessionStatsModal onClose={() => setOpened(false)} /> : null}
-    </>
+    <IconButton
+      icon={<IconChartOutline16 />}
+      tooltip={t('sessionStatsTooltip')}
+      ariaLabel={t('sessionStatsTooltip')}
+      disabled={disabled}
+      onClick={openSessionStats}
+    />
   )
+}
+
+/** 弹窗本体：挂载在 ChatInput 内，与入口按钮解耦 */
+export const SessionStatsModalHost = () => {
+  const open = useSessionStatsOpen((state) => state.open)
+  return open ? <SessionStatsModal onClose={() => useSessionStatsOpen.setState({ open: false })} /> : null
 }
 
 const SessionStatsModal = ({ onClose }: { onClose: () => void }) => {
@@ -76,15 +81,21 @@ const SessionStatsModal = ({ onClose }: { onClose: () => void }) => {
   const compositionTotal = composition.reduce((sum, item) => sum + item.value, 0)
 
   const extras = [
-    { label: t('sessionStatsSearch'), value: String(current?.webSearch ?? 0) },
-    { label: t('sessionStatsFetch'), value: String(current?.pageFetch ?? 0) },
+    { label: t('sessionStatsSearch'), value: formatNumber(current?.webSearch ?? 0) },
+    { label: t('sessionStatsFetch'), value: formatNumber(current?.pageFetch ?? 0) },
     { label: t('sessionStatsParseFiles'), value: `${current?.files ?? 0} / ${current?.pageFetch ?? 0}` },
     { label: t('sessionStatsTts'), value: formatNumber(data?.totals.ttsChars ?? 0) },
     { label: t('sessionStatsAsr'), value: formatNumber(data?.totals.asrSeconds ?? 0) },
   ]
 
   return (
-    <Modal title={t('sessionStatsTitle')} closable className={styles.dialog} onClose={onClose}>
+    <Modal
+      title={t('sessionStatsTitle')}
+      closable
+      className={styles.dialog}
+      mainClassName={styles.modalMain}
+      onClose={onClose}
+    >
       {failed ? (
         <div className={styles.empty}>{t('usageFailed')}</div>
       ) : !data ? (

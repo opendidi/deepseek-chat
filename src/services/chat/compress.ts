@@ -1,4 +1,5 @@
 import type { MessageParam } from '../api/types.js'
+import { COMPRESS_LABELS, COMPRESS_PREFIXES, promptLocale } from '../agent/promptI18n.js'
 
 /**
  * 长对话压缩：开启后，请求上下文超过预算时把较早的消息折叠成一段本地摘要放进 system，
@@ -10,7 +11,6 @@ export const CONTEXT_CHAR_BUDGET = 48_000
 export const KEEP_CHAR_BUDGET = 28_000
 /** 摘要最大长度（含前缀） */
 export const SUMMARY_CHAR_LIMIT = 6_000
-const SUMMARY_PREFIX = '[此前对话摘要（本地生成，仅用于本次请求）]\n'
 
 const textOfBlock = (block: unknown): string => {
   if (typeof block !== 'object' || block === null) {
@@ -40,7 +40,12 @@ export type CompressionResult = {
   summary: string
 }
 
-export const compressMessages = (messages: MessageParam[], enabled: boolean): CompressionResult => {
+export const compressMessages = (
+  messages: MessageParam[],
+  enabled: boolean,
+  locale = 'zh-CN'
+): CompressionResult => {
+  const lang = promptLocale(locale)
   const unchanged: CompressionResult = { messages, summary: '' }
   if (!enabled) {
     return unchanged
@@ -75,17 +80,22 @@ export const compressMessages = (messages: MessageParam[], enabled: boolean): Co
     if (!text) {
       continue
     }
+    const labels = COMPRESS_LABELS[lang]
     const label =
-      message.role === 'user' ? '用户' : message.role === 'assistant' ? '助手' : '上下文'
+      message.role === 'user'
+        ? labels.user
+        : message.role === 'assistant'
+          ? labels.assistant
+          : labels.context
     lines.push(`- ${label}：${text.slice(0, 200).replace(/\s+/g, ' ')}`)
   }
-  const limit = Math.max(0, SUMMARY_CHAR_LIMIT - SUMMARY_PREFIX.length)
+  const limit = Math.max(0, SUMMARY_CHAR_LIMIT - COMPRESS_PREFIXES[lang].length)
   let digest = lines.join('\n')
   if (digest.length > limit) {
     digest = `${digest.slice(0, limit)}…`
   }
   return {
     messages: messages.slice(start),
-    summary: digest ? `${SUMMARY_PREFIX}${digest}` : '',
+    summary: digest ? `${COMPRESS_PREFIXES[lang]}${digest}` : '',
   }
 }

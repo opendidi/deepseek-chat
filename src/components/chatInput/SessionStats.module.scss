@@ -180,9 +180,17 @@
   }
 }
 
+.modalMain {
+  // 弹层高度受限时让内容区滚动（配合 .dialog 的 max-height）
+  min-height: 0;
+  overflow-y: auto;
+}
+
 @media (max-width: 480px) {
   .dialog {
-    width: 100%;
+    // 手机上不再顶满屏幕：左右留 12px、上下留 12px 的呼吸边距
+    width: calc(100% - 24px);
     max-width: none;
+    max-height: calc(100% - 24px);
   }
 }

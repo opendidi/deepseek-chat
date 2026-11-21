@@ -33,8 +33,18 @@
 }
 
 .xs {
+  position: relative;
   width: var(--ds-control-height-xs);
   height: var(--ds-control-height-xs);
+
+  // 触屏上把 28px 的视觉按钮扩展成 44px 命中区
+  @media (pointer: coarse) {
+    &::after {
+      position: absolute;
+      inset: -8px;
+      content: '';
+    }
+  }
 }
 
 .m {

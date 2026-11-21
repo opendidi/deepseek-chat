@@ -1,8 +1,11 @@
+import { translate } from '../../i18n/index.js'
+import { MAX_TOOL_CONTEXT_CHARS } from '../agent/toolConstants.js'
 import type {
   AssistantBlockParam,
   FileBlockParam,
   MessageParam,
   MessageStreamEvent,
+  MessageUsage,
   OutputBlockStart,
   TextBlockParam,
   ToolResultBlockParam,
@@ -317,16 +320,107 @@ const toAssistantParam = (
   }
 }
 
-/** 工具入参由 input_json_delta 分片累积；解析失败时给空对象，交给工具自身报错 */
-export const parseToolInput = (inputJson: string): Record<string, unknown> => {
+export type ToolInputResult = { input: Record<string, unknown>; error?: string }
+
+/**
+ * 工具入参由 input_json_delta 分片累积。解析失败时带上可纠正的错误信息回传给模型，
+ * 而不是静默给空对象让工具只报「缺少参数」。
+ */
+export const readToolInput = (inputJson: string): ToolInputResult => {
   try {
     const value: unknown = JSON.parse(inputJson || '{}')
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {}
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      return { input: value as Record<string, unknown> }
+    }
+    return { input: {}, error: translate('agentToolInputNotObject') }
   } catch {
-    return {}
+    return {
+      input: {},
+      error: translate('agentToolInputInvalid', { fragment: inputJson.slice(0, 120) }),
+    }
   }
+}
+
+export const parseToolInput = (inputJson: string): Record<string, unknown> =>
+  readToolInput(inputJson).input
+
+/** 累加一轮回答里所有工具往返的用量，避免统计只看到最后一轮 */
+export const sumUsage = (rounds: readonly MessageUsage[]): MessageUsage | undefined => {
+  if (rounds.length === 0) {
+    return undefined
+  }
+  return rounds.reduce<MessageUsage>(
+    (total, usage) => ({
+      input_tokens: total.input_tokens + usage.input_tokens,
+      cache_creation_input_tokens:
+        total.cache_creation_input_tokens + usage.cache_creation_input_tokens,
+      cache_read_input_tokens: total.cache_read_input_tokens + usage.cache_read_input_tokens,
+      output_tokens: total.output_tokens + usage.output_tokens,
+      server_tool_use: {
+        web_search_requests:
+          (total.server_tool_use?.web_search_requests ?? 0) +
+          (usage.server_tool_use?.web_search_requests ?? 0),
+        tool_search:
+          (total.server_tool_use?.tool_search ?? 0) + (usage.server_tool_use?.tool_search ?? 0),
+      },
+    }),
+    {
+      input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+      output_tokens: 0,
+    }
+  )
+}
+
+/**
+ * 工具往返会让 requestMessages 持续增长：只保留最近的工具结果原文，
+ * 较早的替换成占位摘要，避免多轮后上下文被历史结果挤满。
+ */
+export const trimToolResults = (
+  messages: readonly MessageParam[],
+  budget = MAX_TOOL_CONTEXT_CHARS
+): MessageParam[] => {
+  const entries: { messageIndex: number; blockIndex: number; length: number }[] = []
+  messages.forEach((message, messageIndex) => {
+    if (message.role !== 'user' || !Array.isArray(message.content)) {
+      return
+    }
+    message.content.forEach((block, blockIndex) => {
+      if (block.type === 'tool_result') {
+        entries.push({ messageIndex, blockIndex, length: block.content.length })
+      }
+    })
+  })
+  let total = entries.reduce((sum, entry) => sum + entry.length, 0)
+  if (total <= budget) {
+    return [...messages]
+  }
+  const omitted = translate('agentToolResultOmitted')
+  const replace = new Map<number, Set<number>>()
+  for (const entry of entries) {
+    if (total <= budget) {
+      break
+    }
+    const indices = replace.get(entry.messageIndex) ?? new Set<number>()
+    indices.add(entry.blockIndex)
+    replace.set(entry.messageIndex, indices)
+    total -= Math.max(0, entry.length - omitted.length)
+  }
+  return messages.map((message, messageIndex) => {
+    const indices = replace.get(messageIndex)
+    if (!indices || message.role !== 'user' || !Array.isArray(message.content)) {
+      return message
+    }
+    return {
+      ...message,
+      content: message.content.map((block, blockIndex) =>
+        indices.has(blockIndex) && block.type === 'tool_result'
+          ? ({ ...block, content: omitted } as ToolResultBlockParam)
+          : block
+      ),
+    } as MessageParam
+  })
 }
 
 /**

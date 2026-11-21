@@ -4,11 +4,13 @@ import { useTranslate } from '../../i18n/index.js'
 import {
   buildMessageVersions,
   getVisibleMessages,
+  sessionStructureKey,
   type MessageVersions,
 } from '../../services/chat/branches.js'
 import { selectMessageVersion } from '../../services/chat/store.js'
 import type { Session } from '../../services/chat/types.js'
 import { closeSearchPanel } from '../search/searchPanelState.js'
+import { clearMessageJump, useMessageJump } from './messageJumpState.js'
 import { AssistantMessage } from './AssistantMessage.js'
 import { ScrollToBottomContext } from './scrollContext.js'
 import { UserMessage } from './UserMessage.js'
@@ -124,9 +126,16 @@ export const MessageList = ({
   const [previousVersions, setPreviousVersions] = useState(() =>
     buildMessageVersions(session, new Map())
   )
+  // 版本分组只依赖 id 与分支关系，流式正文更新时复用上一帧结果
+  const structureKey = sessionStructureKey(session)
+  const sessionRef = useRef(session)
+  sessionRef.current = session
   const versions = useMemo(
-    () => buildMessageVersions(session, previousVersions),
-    [session, previousVersions]
+    () => {
+      void structureKey
+      return buildMessageVersions(sessionRef.current, previousVersions)
+    },
+    [structureKey, previousVersions]
   )
   if (versions !== previousVersions) {
     setPreviousVersions(versions)
@@ -236,6 +245,39 @@ export const MessageList = ({
   const lastIndex = messages.length - 1
   const uploadRetryId = getUploadRetryId(messages, streaming)
   const startIndex = Math.max(0, messages.length - visibleCount)
+
+  // 消息级搜索跳转：把目标消息滚到视口中央并短暂高亮；目标在更早分页时先扩页
+  const jumpTarget = useMessageJump((state) => state.target)
+  useEffect(() => {
+    if (!jumpTarget || jumpTarget.sessionId !== session.id) {
+      return
+    }
+    const index = messages.findIndex((message) => message.id === jumpTarget.messageId)
+    if (index === -1) {
+      clearMessageJump()
+      return
+    }
+    if (index < startIndex) {
+      // 目标在未加载的历史分页里：扩到足够显示它的页数，扩页后本 effect 会再次执行
+      setVisibleCount(messages.length - index)
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      const element = scrollRef.current?.querySelector(
+        `[data-message-id="${CSS.escape(jumpTarget.messageId)}"]`
+      )
+      element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      element?.animate(
+        [
+          { backgroundColor: 'rgba(57, 100, 254, 0.16)' },
+          { backgroundColor: 'rgba(57, 100, 254, 0)' },
+        ],
+        { duration: 1600, easing: 'ease-out' }
+      )
+    })
+    clearMessageJump()
+    return () => cancelAnimationFrame(frame)
+  }, [jumpTarget, session.id, messages, startIndex])
   const shown = messages.slice(startIndex)
   // 每帧都会生成新的可见消息数组，但历史消息对象本身引用不变；
   // 复用上一帧的历史前缀数组，让 memo 的历史子树在流式期间完全跳过。

@@ -1,8 +1,8 @@
 import clsx from 'clsx'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
-import { getVisibleMessages } from '../../services/chat/branches.js'
+import { getVisibleMessages, sessionStructureKey } from '../../services/chat/branches.js'
 import type { Session } from '../../services/chat/types.js'
 import { ChatInput } from '../chatInput/ChatInput.js'
 import { MessageList } from '../messages/MessageList.js'
@@ -23,15 +23,21 @@ export const SessionView = ({
   const t = useTranslate()
   const isMobile = useIsMobile()
   const title = session.title || t('untitledChat')
-  // 目录：当前路径上的全部提问；少于两个时不展示入口
+  // 目录只依赖消息结构：流式逐字刷新正文时无需重建提问列表
+  const structureKey = sessionStructureKey(session)
+  const sessionRef = useRef(session)
+  sessionRef.current = session
   const questions = useMemo(
-    () =>
-      getVisibleMessages(session).flatMap((message) =>
+    () => {
+      // 只在结构变化时重算；流式正文更新不应重建提问列表
+      void structureKey
+      return getVisibleMessages(sessionRef.current).flatMap((message) =>
         message.role === 'user' && message.content
           ? [{ id: message.id, text: message.content }]
           : []
-      ),
-    [session]
+      )
+    },
+    [structureKey]
   )
   return (
     <div className={styles.view}>

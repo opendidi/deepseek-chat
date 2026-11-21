@@ -3,13 +3,15 @@ import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16, IconDownloadOutline16 } from './icons.js'
 import { closeLightbox, useLightbox } from './lightboxState.js'
+import { safeFileName } from '../../utils/fileName.js'
+import { focusFirst, trapTabKey } from '../../utils/dialogFocus.js'
 import styles from './Lightbox.module.scss'
 
 /** 下载当前图片：blob: 地址只用于下载，不用于顶层导航 */
 const download = (src: string, name: string) => {
   const anchor = document.createElement('a')
   anchor.href = src
-  anchor.download = name
+  anchor.download = safeFileName(name, 'image')
   anchor.rel = 'noopener'
   anchor.style.display = 'none'
   document.body.appendChild(anchor)
@@ -25,13 +27,14 @@ export const Lightbox = () => {
   const t = useTranslate()
   const image = useLightbox((state) => state.image)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
+  const figureRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     if (!image) {
       return
     }
     // 打开时移入焦点，关闭时归还；先于其他 effect 记录来源焦点
     restoreFocusRef.current = document.activeElement as HTMLElement | null
-    document.querySelector<HTMLElement>('.lightbox-close')?.focus()
+    focusFirst(figureRef.current)
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) {
         closeLightbox()
@@ -55,10 +58,13 @@ export const Lightbox = () => {
   return createPortal(
     <div className={styles.mask} onClick={closeLightbox}>
       <figure
+        ref={figureRef}
         className={styles.figure}
         role="dialog"
         aria-modal="true"
         aria-label={image.name}
+        tabIndex={-1}
+        onKeyDown={(event) => trapTabKey(event, figureRef.current)}
         onClick={(event) => event.stopPropagation()}
       >
         <img className={styles.image} src={image.src} alt={image.name} />

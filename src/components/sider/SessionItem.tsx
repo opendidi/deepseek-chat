@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { memo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import {
+  IconCheckedOutline14,
   IconDownloadOutline16,
   IconEditOutline16,
   IconEllipsisOutline16,
@@ -15,22 +16,39 @@ import { IconButton } from '../base/IconButton.js'
 import { Menu } from '../base/Menu.js'
 import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from './mobileSiderState.js'
+import { requestMessageJump } from '../messages/messageJumpState.js'
 import styles from './SessionItem.module.scss'
 
 export const SessionItem = memo(function SessionItem({
   session,
   active,
   onDelete,
+  selectMode = false,
+  selected = false,
+  onToggleSelect,
+  jumpTo,
 }: {
   session: SessionSummary
   active: boolean
   onDelete: () => void
+  selectMode?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
+  /** 内容搜索命中时携带：打开会话后跳到命中的那条消息 */
+  jumpTo?: { messageId: string }
 }) {
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
   const displayTitle = session.title || t('untitledChat')
+  const open = () => {
+    selectSession(session.id)
+    if (jumpTo) {
+      requestMessageJump(session.id, jumpTo.messageId)
+    }
+    closeMobileSider()
+  }
 
-  if (editing) {
+  if (editing && !selectMode) {
     const finish = (title: string) => {
       setEditing(false)
       if (title.trim() && title.trim() !== displayTitle) {
@@ -57,25 +75,46 @@ export const SessionItem = memo(function SessionItem({
 
   return (
     <div
-      className={clsx(styles.item, active && styles.active)}
-      role="button"
+      className={clsx(
+        styles.item,
+        active && styles.active,
+        selectMode && styles.selectable,
+        selected && styles.selected
+      )}
+      role={selectMode ? 'checkbox' : 'button'}
+      aria-checked={selectMode ? selected : undefined}
       tabIndex={0}
       aria-label={displayTitle}
       onClick={() => {
-        selectSession(session.id)
-        closeMobileSider()
+        if (selectMode) {
+          onToggleSelect?.()
+          return
+        }
+        open()
       }}
       onKeyDown={(event) => {
-        // Enter/Space 打开会话；菜单触发器在子层有自己的按钮，这里只负责主区域
+        // Enter/Space：选择模式下切换勾选，否则打开会话
         if (event.key === 'Enter' || (event.key === ' ' && !event.nativeEvent.isComposing)) {
           event.preventDefault()
-          selectSession(session.id)
-          closeMobileSider()
+          if (selectMode) {
+            onToggleSelect?.()
+            return
+          }
+          open()
         }
       }}
     >
+      {selectMode ? (
+        <span
+          className={clsx(styles.checkbox, selected && styles.checkboxChecked)}
+          aria-hidden="true"
+        >
+          {selected ? <IconCheckedOutline14 /> : null}
+        </span>
+      ) : null}
       <div className={styles.title}>{displayTitle}</div>
-      <div className={styles.action} onClick={(event) => event.stopPropagation()}>
+      {!selectMode ? (
+        <div className={styles.action} onClick={(event) => event.stopPropagation()}>
         <Menu
           options={[
             {
@@ -121,6 +160,7 @@ export const SessionItem = memo(function SessionItem({
           )}
         </Menu>
       </div>
+      ) : null}
     </div>
   )
 })

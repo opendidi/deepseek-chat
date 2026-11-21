@@ -8,13 +8,14 @@ import { IconPhotoErrorFill20, IconRefreshOutline16 } from '../base/icons.js'
 import { openLightbox } from '../base/lightboxState.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { FileCard } from '../files/FileCard.js'
+import { safeFileName } from '../../utils/fileName.js'
 import styles from './MessageFile.module.scss'
 
 /** 原件一律以「下载」交付，绝不把 blob: 地址用于顶层导航（html/svg 会在同源执行脚本）。 */
 const downloadBlob = (url: string, name: string) => {
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = name
+  anchor.download = safeFileName(name, 'download')
   anchor.rel = 'noopener'
   anchor.style.display = 'none'
   document.body.appendChild(anchor)

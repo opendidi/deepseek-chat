@@ -13,9 +13,9 @@ export type UsageStats = {
   daily: { date: string; count: number }[]
 }
 
-const DAY = 86_400_000
 
 const dayKey = (time: number): string | null => formatDate(time)
+import { DAY_MS } from '../../utils/time.js'
 
 /** 扫描全部本地会话汇总用量；会话较多时耗时随数量线性增长，只在打开面板时调用 */
 export const collectUsageStats = async (): Promise<UsageStats> => {
@@ -50,7 +50,7 @@ export const collectUsageStats = async (): Promise<UsageStats> => {
   }
   const today = new Date()
   const daily = Array.from({ length: 7 }, (_, index) => {
-    const key = formatDate(today.getTime() - (6 - index) * DAY) ?? ''
+    const key = formatDate(today.getTime() - (6 - index) * DAY_MS) ?? ''
     return { date: key, count: dailyCounts.get(key) ?? 0 }
   })
   return {

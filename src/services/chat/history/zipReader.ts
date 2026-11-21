@@ -8,7 +8,9 @@ const INFLATE_CHUNK_BYTES = 8 * 1024
  * 可以用几 MB 文件声称解压出数 GB，任由其解压会让页面 OOM。
  * 这里同时限制文件本体、条目数、单条与累计解压字节。
  */
-const MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
+export const MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
+/** 加密容器 = 明文 ZIP + 固定头与 AES-GCM 标签；留 8MB 余量，仍与明文共用同一量级上限 */
+export const MAX_ENCRYPTED_ARCHIVE_BYTES = MAX_ARCHIVE_BYTES + 8 * 1024 * 1024
 const MAX_ENTRIES = 10_000
 const MAX_ENTRY_BYTES = 32 * 1024 * 1024
 const MAX_TOTAL_UNCOMPRESSED = 512 * 1024 * 1024

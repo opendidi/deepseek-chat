@@ -1,2 +1,8 @@
 allowBuilds:
-  '@parcel/watcher': set this to true or false
+  '@parcel/watcher': true
+peerDependencyRules:
+  ignoreMissing:
+    - sass
+
+overrides:
+  katex: 0.16.22

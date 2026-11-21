@@ -1,8 +1,8 @@
 import { translate } from '../../i18n/index.js'
 import { monthKey } from '../../utils/format.js'
 import type { SessionSummary } from './types.js'
+import { DAY_MS } from '../../utils/time.js'
 
-const DAY = 86_400_000
 
 const startOfDay = (time: number) => new Date(time).setHours(0, 0, 0, 0)
 
@@ -16,7 +16,7 @@ export const groupSessions = (sessions: SessionSummary[], now: number, t = trans
       pinned.push(session)
       continue
     }
-    const diff = Math.floor((now - startOfDay(session.updatedAt)) / DAY)
+    const diff = Math.floor((now - startOfDay(session.updatedAt)) / DAY_MS)
     const key =
       diff <= 0
         ? 'sessionHistoryTimelineLabelToday'

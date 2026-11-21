@@ -1,17 +1,31 @@
 /**
  * 生产构建上的浏览器冒烟测试：pnpm build && pnpm test:e2e
- * 覆盖样式加载、模型面板、选区引用提交、会话刷新恢复；无 Chrome 时自动跳过。
+ * 覆盖样式加载、模型面板、选区引用提交、会话刷新恢复（真实 SQLite 后端持久化）；无 Chrome 时自动跳过。
  */
 import { spawn } from 'node:child_process'
-import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = path.join(process.cwd(), 'dist')
-const PORT = Number(process.env.E2E_PORT || 8122)
+const ROOT_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+const DIST = path.join(ROOT_DIR, 'dist')
+const BACKEND_PORT = Number(process.env.E2E_BACKEND_PORT || 8123)
 const CDP_PORT = Number(process.env.E2E_CDP_PORT || 9372)
-const BASE = `http://127.0.0.1:${PORT}/deepseek/`
+const BASE = `http://127.0.0.1:${BACKEND_PORT}/`
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+/** 轮询条件而不是固定等待：慢机器上不会因时序不足误报失败 */
+const waitFor = async (predicate, timeout = 8000, interval = 50) => {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    try {
+      if (await predicate()) {
+        return true
+      }
+    } catch {}
+    await sleep(interval)
+  }
+  return false
+}
 
 const CHROME_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -28,7 +42,7 @@ const chrome =
     ? process.env.CHROME_PATH
     : null) || CHROME_CANDIDATES.find((candidate) => fs.existsSync(candidate))
 
-if (!fs.existsSync(path.join(ROOT, 'index.html'))) {
+if (!fs.existsSync(path.join(DIST, 'index.html'))) {
   console.error('[e2e] dist/index.html 不存在，请先运行 pnpm build')
   process.exit(1)
 }
@@ -37,36 +51,39 @@ if (!chrome) {
   process.exit(0)
 }
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
+// 存储后端托管 dist/ 并提供 /api：隔离的数据目录与全新浏览器 profile，保证每次跑的是确定状态
+const DATA_DIR = path.join(ROOT_DIR, '.test-build', 'e2e-data')
+const PROFILE = path.join(ROOT_DIR, '.test-build', 'chrome-e2e')
+const venvPython =
+  process.platform === 'win32'
+    ? path.join(ROOT_DIR, '.venv', 'Scripts', 'python.exe')
+    : path.join(ROOT_DIR, '.venv', 'bin', 'python')
+const python = fs.existsSync(venvPython) ? venvPython : 'python'
+fs.rmSync(DATA_DIR, { force: true, recursive: true })
+fs.rmSync(PROFILE, { force: true, recursive: true })
+fs.rmSync(path.join(ROOT_DIR, '.test-build', 'chrome-e2e-mobile'), { force: true, recursive: true })
+
+const backend = spawn(
+  python,
+  ['-m', 'uvicorn', 'server.app:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)],
+  {
+    cwd: ROOT_DIR,
+    stdio: 'inherit',
+    env: { ...process.env, DIST_DIR: DIST, DATA_DIR },
+  }
+)
+const backendReady = await waitFor(async () => (await fetch(`${BASE}api/health`)).ok, 15_000)
+if (!backendReady) {
+  backend.kill()
+  throw new Error('存储后端未就绪（需要先创建 .venv 并安装 requirements.txt）')
 }
-const server = http.createServer((req, res) => {
-  const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname)
-  if (!pathname.startsWith('/deepseek/')) {
-    res.writeHead(404)
-    res.end()
-    return
-  }
-  const relative = pathname.slice('/deepseek/'.length)
-  let file = path.join(ROOT, relative)
-  if (!relative || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-    file = path.join(ROOT, 'index.html')
-  }
-  res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' })
-  fs.createReadStream(file).pipe(res)
-})
-await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve))
 
 const proc = spawn(
   chrome,
   [
     '--headless=new',
     `--remote-debugging-port=${CDP_PORT}`,
-    `--user-data-dir=${path.join(process.cwd(), '.test-build', 'chrome-e2e')}`,
+    `--user-data-dir=${PROFILE}`,
     '--no-first-run',
     '--no-default-browser-check',
     '--no-sandbox',
@@ -128,7 +145,11 @@ try {
       returnByValue: true,
       awaitPromise: true,
     })
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.text)
+    if (result.exceptionDetails) {
+      const detail = result.exceptionDetails
+      const text = detail.exception?.description || detail.exception?.value || detail.text
+      throw new Error('evaluate failed: ' + text)
+    }
     return result.result.value
   }
   const ready = async () => {
@@ -145,7 +166,6 @@ try {
       setter.call(ta, ${JSON.stringify(text)});
       ta.dispatchEvent(new Event('input', { bubbles: true }));
     })()`)
-    await sleep(180)
     await evaluate(`document.querySelector('button[aria-label="发送"]').click()`)
   }
 
@@ -187,7 +207,7 @@ try {
   })
   await call('Page.navigate', { url: BASE })
   await ready()
-  await sleep(400)
+  await waitFor(() => evaluate(`document.styleSheets.length > 0`))
 
   const styles = await evaluate(`(() => ({
     brand: getComputedStyle(document.documentElement).getPropertyValue('--dsw-alias-brand-text').trim()
@@ -196,31 +216,42 @@ try {
   }))()`)
 
   await evaluate(`document.querySelector('button[aria-label="选择模型"]').click()`)
-  await sleep(280)
+  await waitFor(() => evaluate(`!!document.querySelector('[role="dialog"]')`))
   const panel = await evaluate(`(() => {
     const p = document.querySelector('[role="dialog"]');
     const r = p.getBoundingClientRect();
     return { width: Math.round(r.width), cards: p.querySelectorAll('[role="radio"]').length };
   })()`)
   await evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find(b => /从云端获取/.test(b.textContent)).click()`)
-  await sleep(320)
+  await waitFor(async () => (await evaluate(`document.querySelectorAll('[role="radio"]').length`)) === 3)
   const cloudCount = await evaluate(`document.querySelectorAll('[role="radio"]').length`)
   await evaluate(`document.querySelector('button[aria-label="选择模型"]').click()`)
-  await sleep(150)
+  await waitFor(async () => !(await evaluate(`!!document.querySelector('[role="dialog"]')`)))
 
   await typeAndSend('第一个问题')
   for (let i = 0; i < 60; i += 1) {
     if (await evaluate(`document.body.innerText.includes('需要我详细讲某个规则吗')`)) break
     await sleep(200)
   }
-  await sleep(400)
-  await evaluate(`(() => {
+  await waitFor(() => evaluate(`!!document.querySelector('.ds-assistant-message-main-content')`))
+  // mermaid 图表懒加载 + 渲染，作为依赖升级的回归覆盖
+  const replyState = await evaluate(`(() => ({
+    hasText: document.body.innerText.includes('需要我详细讲某个规则吗'),
+    paragraphs: document.querySelectorAll('.ds-assistant-message-main-content p').length,
+    requests: window.__req.length,
+  }))()`)
+  if (!replyState.hasText || replyState.paragraphs === 0) {
+    throw new Error(`回复正文未就绪：${JSON.stringify(replyState)}`)
+  }
+  const selected = await evaluate(`(() => {
     const p = [...document.querySelectorAll('.ds-assistant-message-main-content p')].at(-1);
+    if (!p) return false;
     const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
     let node = null;
     while (walker.nextNode()) {
       if ((walker.currentNode.textContent || '').includes('某个规则')) { node = walker.currentNode; break; }
     }
+    if (!node) return false;
     const text = node.textContent || '';
     const start = text.indexOf('某个规则');
     const range = document.createRange();
@@ -234,17 +265,28 @@ try {
       clientX: Math.round(r.left + 4), clientY: Math.round(r.bottom + 2),
       bubbles: true, cancelable: true,
     }));
+    return true;
   })()`)
-  await sleep(250)
+  if (!selected) {
+    throw new Error('未能在回复正文中定位引用文字')
+  }
+  await waitFor(() => evaluate(`!!document.querySelector('[role="menu"] [role="menuitem"]')`))
   const menuItems = await evaluate(
     `[...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map(b => b.innerText.trim())`
   )
   await evaluate(
     `[...document.querySelectorAll('[role="menu"] [role="menuitem"]')].find(b => b.innerText.includes('引用')).click()`
   )
-  await sleep(250)
+  await waitFor(() => evaluate(`(document.querySelector('textarea')?.value || '').includes('某个规则')`))
+  const repliesBefore = await evaluate(
+    `document.querySelectorAll('.ds-assistant-message-main-content').length`
+  )
   await typeAndSend('可以。')
-  await sleep(600)
+  await waitFor(
+    async () =>
+      (await evaluate(`document.querySelectorAll('.ds-assistant-message-main-content').length`)) >
+      repliesBefore
+  )
   const quoted = await evaluate(`(() => {
     const last = window.__req.at(-1) || {};
     const user = (last.messages || []).filter((m) => m.role === 'user').at(-1);
@@ -253,33 +295,45 @@ try {
   })()`)
 
   const hashBefore = await evaluate('location.hash')
+  // 等服务器确认本轮已落盘（300ms 防抖 + HTTP 写入），再 reload 验证恢复——消除时序竞态
+  const sid = hashBefore.slice('#s='.length)
+  await waitFor(async () => {
+    const stored = await (await fetch(`${BASE}api/sessions/${sid}`)).json()
+    return stored.messages?.length === 4
+  })
+  // 标记旧文档：reload 后标记消失才说明新页面已真正加载，避免在旧 DOM 上提前断言
+  await evaluate(`window.__oldDoc = true`)
   await call('Page.reload', { ignoreCache: true })
+  await waitFor(async () =>
+    (await evaluate(`typeof window.__oldDoc === 'undefined' && !!document.querySelector('textarea')`))
+  )
   await ready()
-  await sleep(600)
+  await waitFor(() => evaluate(`document.body.innerText.includes('可以。')`))
   const restored = await evaluate(`(() => ({
     hash: location.hash,
     welcome: document.body.innerText.includes('今天有什么可以帮到你'),
     hasMessage: document.body.innerText.includes('可以。'),
+    bodyText: document.body.innerText.slice(0, 220),
   }))()`)
 
   await evaluate(
     `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === '设置').click()`
   )
-  await sleep(250)
+  await waitFor(() => evaluate(`!!document.querySelector('[role="dialog"]')`))
   const statsTab = await evaluate(`(() => {
     const tab = [...document.querySelectorAll('[role="tab"]')].find(b => b.innerText.trim() === '统计');
     if (!tab) return false;
     tab.click();
     return true;
   })()`)
-  await sleep(900)
+  await waitFor(() => evaluate(`document.querySelectorAll('[class*="kpiValue-"]').length >= 6`))
   const stats = await evaluate(`(() => {
     const panel = document.querySelector('[role="tabpanel"]');
     const text = panel?.innerText || '';
     return {
       tabs: [...document.querySelectorAll('[role="tab"]')].map(b => b.innerText.trim()),
       hasTitle: text.includes('用量概览'),
-      hasKpi: text.includes('合计费用') && text.includes('输入 Token'),
+      hasKpi: text.includes('预估费用') && text.includes('总 Token'),
       hasRanges: text.includes('今天') && text.includes('7 天') && text.includes('30 天'),
       hasBilling: text.includes('计费口径') && text.includes('服务端搜索与抓取免费'),
       hasContext: text.includes('上下文统计管理'),
@@ -290,7 +344,7 @@ try {
   await evaluate(
     `[...document.querySelectorAll('[role="tabpanel"] button')].find(b => b.innerText.trim() === '30 天').click()`
   )
-  await sleep(700)
+  await waitFor(() => evaluate(`document.querySelectorAll('[class*="heatCell-"]').length > 0`))
   const heatCells = await evaluate(`document.querySelectorAll('[class*="heatCell-"]').length`)
 
   // 三个时间范围共用同一个绘图区高度，切换时柱状图不应忽高忽矮
@@ -299,15 +353,99 @@ try {
     await evaluate(
       `[...document.querySelectorAll('[role="tabpanel"] button')].find(b => b.innerText.trim() === ${JSON.stringify(label)}).click()`
     )
-    await sleep(650)
+    await waitFor(() => evaluate(`!!document.querySelector('[class*="bars-"]')`))
     barHeights[label] = await evaluate(
       `Math.round(document.querySelector('[class*="bars-"]').getBoundingClientRect().height)`
     )
   }
   const barHeightValues = Object.values(barHeights)
 
+  // 移动视口冒烟：390x844 下工具行低频入口应收进「⋯ 更多」菜单
+  const MOBILE_CDP_PORT = Number(process.env.E2E_MOBILE_CDP_PORT || 9373)
+  let mobileMenu = false
+  const mproc = spawn(
+    chrome,
+    [
+      '--headless=new',
+      `--remote-debugging-port=${MOBILE_CDP_PORT}`,
+      `--user-data-dir=${path.join(ROOT_DIR, '.test-build', 'chrome-e2e-mobile')}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--no-sandbox',
+      '--disable-gpu',
+      '--window-size=390,844',
+      'about:blank',
+    ],
+    { stdio: 'ignore' }
+  )
+  try {
+    let mtarget
+    for (let i = 0; i < 60; i += 1) {
+      try {
+        const list = await (await fetch(`http://127.0.0.1:${MOBILE_CDP_PORT}/json/list`)).json()
+        mtarget = list.find((item) => item.type === 'page')
+        if (mtarget) break
+      } catch {}
+      await sleep(250)
+    }
+    if (mtarget) {
+      const mws = new WebSocket(mtarget.webSocketDebuggerUrl)
+      await new Promise((resolve, reject) => {
+        mws.onopen = resolve
+        mws.onerror = reject
+      })
+      let mseq = 0
+      const mpending = new Map()
+      mws.onmessage = (event) => {
+        const message = JSON.parse(event.data)
+        if (message.id && mpending.has(message.id)) {
+          const task = mpending.get(message.id)
+          mpending.delete(message.id)
+          message.error ? task.reject(new Error(JSON.stringify(message.error))) : task.resolve(message.result)
+        }
+      }
+      const mcall = (method, params = {}) =>
+        new Promise((resolve, reject) => {
+          const id = ++mseq
+          mpending.set(id, { resolve, reject })
+          mws.send(JSON.stringify({ id, method, params }))
+        })
+      const mevaluate = async (expression) => {
+        const result = await mcall('Runtime.evaluate', {
+          expression,
+          returnByValue: true,
+          awaitPromise: true,
+        })
+        if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || 'evaluate failed')
+        return result.result.value
+      }
+      await mcall('Page.enable')
+      await mcall('Runtime.enable')
+      await mcall('Page.addScriptToEvaluateOnNewDocument', {
+        source: `try { localStorage.setItem('deepseek-chat:api-key', 'sk-e2e-placeholder') } catch (e) {}`,
+      })
+      await mcall('Page.navigate', { url: BASE })
+      let mobileReady = false
+      for (let i = 0; i < 80; i += 1) {
+        if (await mevaluate('!!document.querySelector("textarea")').catch(() => false)) {
+          mobileReady = true
+          break
+        }
+        await sleep(250)
+      }
+      if (mobileReady) {
+        mobileMenu = await mevaluate(`!!document.querySelector('button[aria-label="更多"]')`)
+      }
+      mws.close()
+    }
+  } catch {
+    mobileMenu = false
+  } finally {
+    mproc.kill()
+  }
+
   const checks = {
-    cssLoaded: cssResponses.length > 0 && cssResponses.every((status) => status === 200),
+    cssLoaded: cssResponses.length > 0 && cssResponses.every((status) => status === 200 || status === 304),
     brandColor: styles.brand === '#3964fe',
     panelWidth: panel.width === 300,
     cloudModels: cloudCount === 3,
@@ -323,16 +461,17 @@ try {
       barHeightValues[0] > 0 &&
       barHeightValues.every((height) => height === barHeightValues[0]),
     noConsoleErrors: consoleErrors.length === 0,
+    mobileMenu,
   }
   const ok = Object.values(checks).every(Boolean)
   console.log(JSON.stringify({ ok, checks, details: { styles, panel, cloudCount, menuItems, quoted, restored, stats, heatCells, barHeights, consoleErrors } }, null, 2))
   if (!ok) process.exitCode = 1
 } catch (error) {
-  console.error(`[e2e] ${error.message}`)
+  console.error(`[e2e] ${error.stack || error.message || error}`)
+  console.error('[e2e] page console errors:', JSON.stringify(consoleErrors))
   process.exitCode = 1
 } finally {
   ws?.close()
   proc.kill()
-  server.closeAllConnections?.()
-  server.close()
+  backend.kill()
 }

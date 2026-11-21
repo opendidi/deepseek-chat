@@ -6,6 +6,7 @@ import {
   getVisibleMessages,
   normalizeSession,
   selectVersion,
+  sessionStructureKey,
 } from '../src/services/chat/branches.js'
 import type { AssistantMessage, Message, Session, UserMessage } from '../src/services/chat/types.js'
 
@@ -68,4 +69,32 @@ test('追加与切换分支只改变选中路径', () => {
   // 原分支数据仍在，切换后可恢复
   assert.ok(branched.messages.some((message) => message.id === 'u2'))
   assert.deepEqual(ids(getVisibleMessages(selectVersion(branched, 'u2'))), ['u1', 'a1', 'u2', 'a2'])
+})
+
+test('结构签名忽略正文变化，只在分支关系变化时改变', () => {
+  const base = normalizeSession(linear())
+  const key = sessionStructureKey(base)
+  const streamed: Session = {
+    ...base,
+    messages: base.messages.map((message) =>
+      message.role === 'assistant' ? { ...message, blocks: [...message.blocks] } : message
+    ),
+  }
+  assert.equal(sessionStructureKey(streamed), key)
+
+  const branched = appendBranch(base, 'a1', [user('u3'), assistant('a3')])
+  assert.notEqual(sessionStructureKey(branched), key)
+})
+
+test('结构签名不变时可见路径仍返回最新消息对象', () => {
+  const base = normalizeSession(linear())
+  const streamed: Session = {
+    ...base,
+    messages: base.messages.map((message) =>
+      message.role === 'assistant' ? { ...message, status: 'streaming' } : message
+    ),
+  }
+  const path = getVisibleMessages(streamed)
+  assert.equal(path[1]?.role === 'assistant' && path[1].status, 'streaming')
+  assert.notEqual(getVisibleMessages(streamed), getVisibleMessages(base))
 })

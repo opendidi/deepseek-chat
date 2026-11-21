@@ -25,7 +25,12 @@ export const modelPrices = (model: string | null): TokenPrices => {
   const found =
     BUILTIN_MODELS.find((item) => item.id === model) ?? BUILTIN_MODELS[0]
   const prices = found.prices ?? BUILTIN_MODELS[0].prices
-  return prices ? (prices.map(Number) as unknown as TokenPrices) : [0, 0, 0]
+  if (!prices) {
+    return [0, 0, 0]
+  }
+  // 显式解构，让长度与元素类型真正受元组约束
+  const [hit, input, output] = prices
+  return [Number(hit), Number(input), Number(output)]
 }
 
 const BEIJING_OFFSET = 8 * 60 * 60 * 1000

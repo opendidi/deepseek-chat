@@ -19,7 +19,7 @@ export const Toast = () => {
   }
   const error = message.type === 'error'
   return (
-    <div key={id} className={clsx(styles.toast, error && styles.error)} role="status">
+    <div key={id} className={clsx(styles.toast, error && styles.error)} role={error ? 'alert' : 'status'}>
       {error ? (
         <span className={styles.icon}>
           <IconToastError16 />

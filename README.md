@@ -2,32 +2,35 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A static chat front end powered by the DeepSeek API. No application backend is needed: the browser talks directly to the configured API service, and the API key stays on the device.
+A local chat app for the DeepSeek API: a React front end plus a Python (FastAPI + SQLite) storage backend. Chats, attachments and favorites live in a single local `data/chats.db` file; the API key stays on the device.
 
-- Upstream online demo: <https://deepseek-ai.github.io/chat-demo/>
-- Pushing to `main` builds and publishes GitHub Pages through `.github/workflows/pages.yml` (enable Pages in the repository settings).
-- You can also download a build from [Releases](https://github.com/opendidi/deepseek-chat/releases), extract it, and double-click `index.html` to run it locally without installing or building anything. Enter your API key in Settings before your first chat.
+- Pushing to `main` runs type checks, lint, front-end/back-end tests and a browser smoke test through `.github/workflows/ci.yml`.
 
 ## Getting started
 
-Install Node.js 22.12+ (CI uses 24) and pnpm, then run:
+Install Node.js 22.12+ (CI uses 24), pnpm 12.6.0 and Python 3.11+:
 
 ```sh
 git clone https://github.com/opendidi/deepseek-chat.git
 cd deepseek-chat
 pnpm install
-pnpm dev
+python starter.py
 ```
 
-`pnpm dev` listens on `http://localhost:8090` and opens the browser automatically. If that port is taken, use `PORT=8091 pnpm dev`, or `PORT=auto pnpm dev` to let the dev server pick a free port.
+**Daily use**: `python starter.py` is a single command that bootstraps the venv, builds the front end if needed, and starts the server — the backend serves both the `dist/` build and the storage API at `http://127.0.0.1:8000`. Data lives in `data/chats.db` (a single SQLite file including attachment blobs) — backing up is copying that file; set the `DATA_DIR` environment variable to change the location. Options: `--port 8010` to change the port, `--no-open` to skip the browser.
 
-To build the static site:
+**Front-end development**: start the two processes in separate terminals —
 
 ```sh
-pnpm build
+python starter.py --no-open   # terminal 1: storage backend (:8000)
+pnpm dev                      # terminal 2: front-end dev server (http://localhost:8090, /api proxied to the backend)
 ```
 
-The output is written to `dist/`. Assets use relative paths, so you can point a static server's document root at `dist/` or host it under any subpath (for example GitHub Pages' `/deepseek-chat/`). You can also open `dist/index.html` directly; this requires browser support for storage on `file://` pages and an API service that permits their cross-origin requests. A meta CSP restricts script sources; enable gzip or brotli compression for JS/CSS when deploying.
+If ports are taken: `PORT=8091 pnpm dev`, `python starter.py --port 8010`.
+
+On first launch, any existing chat data stored in the browser (previous IndexedDB version) is migrated into SQLite automatically.
+
+For server deployment (systemd / nginx + HTTPS / Docker) see [DEPLOY.md](DEPLOY.md); note the storage API has no built-in auth — pair a public deployment with nginx Basic Auth or similar access control.
 
 ## Features
 
@@ -66,7 +69,9 @@ The output is written to `dist/`. Assets use relative paths, so you can point a 
 
 ## Data and storage
 
-Your API key and settings are stored in the browser's localStorage. Conversations and original attachments are stored in IndexedDB, isolated by browser profile and site origin. In Settings → Data you can turn off "Remember API Key on this device"; the key then stays in memory only and must be re-entered after a reload. The conversation id appears in the URL hash but contains no message content. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
+Your API key and settings are stored in the browser's localStorage. Conversations, original attachments, and favorites are stored in the local `data/chats.db` file (a single SQLite database written by the Python backend), with attachment blobs inside the same file. In Settings → Data you can turn off "Remember API Key on this device"; the key then stays in memory only and must be re-entered after a reload. The conversation id appears in the URL hash but contains no message content. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
+
+The storage backend only listens on `127.0.0.1`, so it is reachable from this machine only. Saves, deletions, and imports run inside SQLite transactions; a failed import never damages existing data. To back up, copy `data/chats.db` (stop the backend first); set the `DATA_DIR` environment variable to relocate it.
 
 History import and export in Settings use ZIP archives. After confirmation and successful validation, importing replaces all local conversations and attachments. Exports include conversations and locally available original images, but exclude API keys, settings, and original non-image attachments. See the [history import/export documentation (Chinese)](src/services/chat/history/README.md) for the archive format and preservation details. Encrypted export wraps the ZIP in a password-protected container (PBKDF2 + AES-256-GCM); enter the export password to import it again.
 
@@ -76,15 +81,19 @@ Settings → Data → Delete all chats clears all local conversations, original 
 
 | Command       | Description                                             |
 | ------------- | ------------------------------------------------------- |
-| `pnpm dev`    | Start the dev server (port 8090 by default; `PORT` overrides) |
+| `pnpm dev`    | Start the front-end dev server (port 8090 by default, `/api` proxied to the backend on :8000; `PORT` overrides) |
+| `pnpm backend` | Start the storage backend (`http://127.0.0.1:8000`, serves dist and /api) |
+| `python starter.py` | Run the production shape in one command: venv bootstrap + front-end build + server + browser |
 | `pnpm build`  | Build into `dist/`                                      |
 | `pnpm type`   | Run TypeScript type checks                              |
 | `pnpm lint`   | Lint with oxlint                                        |
 | `pnpm test`   | Compile and run node:test unit tests                    |
+| `pnpm test:backend` | Run the backend pytest suite |
 | `pnpm format` | Format with oxfmt                                       |
 | `pnpm icons`  | Regenerate PWA icons into `public/`                     |
 | `pnpm scss:types` | Generate missing `*.module.scss.d.ts` declarations |
-| `pnpm test:e2e` | Browser smoke test on the production build (needs Chrome) |
+| `pnpm scss:types:check` | Verify declarations are in sync (used in CI) |
+| `pnpm test:e2e` | Browser smoke test on the production build with the real backend (needs Chrome) |
 
 All styles are SCSS: component styles use `*.module.scss` (CSS Modules) and global styles use `*.scss`. Every component stylesheet has a matching `*.module.scss.d.ts` (hand-written or generated by `pnpm scss:types`), so typos in class names are caught by the type checker. rspack compiles them with `sass-loader` and then downlevels them with `builtin:lightningcss-loader`; third-party CSS (such as KaTeX) still uses the plain `.css` rule.
 
@@ -92,7 +101,7 @@ All styles are SCSS: component styles use `*.module.scss` (CSS Modules) and glob
 
 Chat uses `deepseek-flash` by default through Anthropic-compatible Messages / Files APIs. Speech features use ASR / TTS endpoints. Requests include extensions for search, link reading, titles, and `latest_reminder`, plus client tool declarations when Agent tools are enabled, so the configured service must support the corresponding capabilities. Supported attachment formats are determined by server-side validation.
 
-Prism language packs and Mermaid dependencies are merged into a handful of async chunks at build time to avoid dozens of tiny requests. On every push to `main`, [CI](.github/workflows/pages.yml) runs type checks, lint, unit tests, the build, and a browser smoke test before publishing GitHub Pages.
+Prism language packs and Mermaid dependencies are merged into a handful of async chunks at build time to avoid dozens of tiny requests. On every push to `main`, [CI](.github/workflows/ci.yml) runs type checks, SCSS declaration checks, lint, front-end unit tests, backend pytest, the build, and a browser smoke test.
 
 ```text
 src/

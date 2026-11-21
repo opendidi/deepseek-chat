@@ -15,6 +15,7 @@
 }
 
 .button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -43,5 +44,14 @@
   svg {
     width: 14px;
     height: 14px;
+  }
+
+  // 触屏上用透明伪元素把高度命中区扩到 44px
+  @media (pointer: coarse) {
+    &::after {
+      position: absolute;
+      inset: -8px 0;
+      content: '';
+    }
   }
 }

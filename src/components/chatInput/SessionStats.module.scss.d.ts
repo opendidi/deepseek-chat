@@ -9,6 +9,7 @@ declare const styles: {
   readonly extraValue: string
   readonly extras: string
   readonly go: string
+  readonly modalMain: string
   readonly pressureCard: string
   readonly pressureLabel: string
   readonly pressureNumbers: string

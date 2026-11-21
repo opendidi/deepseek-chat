@@ -7,15 +7,13 @@ import { useChatStore } from './store.js'
 import * as db from './db.js'
 import type { AssistantMessage, Session } from './types.js'
 
+import { safeFileName } from '../../utils/fileName.js'
+
 /** 导出里记录的引用来源：仅标题与链接 */
 type SourceCitation = { title: string | null; url: string }
 
-/** 导出文件名里的标题：替换文件系统非法字符 */
-const safeFileName = (title: string) =>
-  (title
-    .trim()
-    .replace(/[\\/:*?"<>|\r\n]+/g, '_')
-    .replace(/_+$/, '') || 'chat') + '.md'
+/** 导出文件名里的标题：统一净化文件系统非法字符与控制字符 */
+const exportFileName = (title: string) => `${safeFileName(title, 'chat')}.md`
 
 /** 一条回答的正文：思考折叠块 + 正文文本，返回收集到的引用来源 */
 const replyToMarkdown = (
@@ -95,6 +93,6 @@ export const exportSessionMarkdown = async (sessionId: string): Promise<boolean>
   // 未打开的会话导出期间可能刚被重命名，标题以列表为准
   const session = summary ? { ...stored, title: summary.title } : stored
   const blob = new Blob([sessionToMarkdown(session)], { type: 'text/markdown;charset=utf-8' })
-  downloadBlob(safeFileName(session.title), blob)
+  downloadBlob(exportFileName(session.title), blob)
   return true
 }

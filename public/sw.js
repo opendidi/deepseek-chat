@@ -93,6 +93,10 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) {
     return
   }
+  // 存储 API 一律直连：同源 GET 否则会进 stale-while-revalidate 缓存，读到脏数据
+  if (url.pathname.startsWith('/api/')) {
+    return
+  }
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request))
     return

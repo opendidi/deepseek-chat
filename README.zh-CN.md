@@ -2,32 +2,35 @@
 
 [English](README.md) | 简体中文
 
-基于 DeepSeek API 的静态聊天前端。无需应用后端：浏览器直接请求配置的 API 服务，API Key 只保存在本机。
+基于 DeepSeek API 的本地聊天应用：React 前端 + Python（FastAPI + SQLite）存储后端。对话、附件与收藏保存在本机 `data/chats.db` 单文件里，API Key 只保存在本机。
 
-- 上游在线示例：<https://deepseek-ai.github.io/chat-demo/>
-- 本仓库 push 到 `main` 时，`.github/workflows/pages.yml` 会自动构建并发布 GitHub Pages（需在仓库设置中启用 Pages）。
-- 也可从 [Releases](https://github.com/opendidi/deepseek-chat/releases) 下载构建包，解压后双击 `index.html` 本地使用，无需安装或构建。首次使用请在设置中填写 API Key。
+- 本仓库 push 到 `main` 时，`.github/workflows/ci.yml` 会自动运行类型检查、lint、前后端测试与浏览器冒烟测试。
 
 ## 快速开始
 
-需要 Node.js 22.12+（CI 使用 24）和 pnpm：
+需要 Node.js 22.12+（CI 使用 24）、pnpm 12.6.0 和 Python 3.11+：
 
 ```sh
 git clone https://github.com/opendidi/deepseek-chat.git
 cd deepseek-chat
 pnpm install
-pnpm dev
+python starter.py
 ```
 
-`pnpm dev` 默认监听 `http://localhost:8090` 并自动打开浏览器。端口被占用时可用 `PORT=8091 pnpm dev`，或 `PORT=auto pnpm dev` 让开发服务器自动挑选空闲端口。
+**日常使用**：`python starter.py` 一条命令即可——自动完成虚拟环境自举、前端构建、启动服务并打开浏览器，后端同时托管 `dist/` 产物与存储接口（`http://127.0.0.1:8000`）。数据保存在 `data/chats.db`（SQLite 单文件，含附件原件），备份即复制该文件；`DATA_DIR` 环境变量可改存储位置。常用参数：`--port 8010` 换端口、`--no-open` 不自动开浏览器。
 
-构建静态产物：
+**前端开发**：前后端分开启动，两个终端——
 
 ```sh
-pnpm build
+python starter.py --no-open   # 终端 1：存储后端（8000）
+pnpm dev                      # 终端 2：前端开发服务器（http://localhost:8090，/api 自动代理到后端）
 ```
 
-产物写入 `dist/`。资源使用相对路径，把静态服务器根目录指向 `dist/` 即可，也能托管在任意子路径下（如 GitHub Pages 的 `/deepseek-chat/`）。直接打开 `dist/index.html` 需要浏览器允许 `file://` 页面存储，且 API 服务允许来自 `file://` 的跨域请求。页面通过 meta CSP 限制脚本来源；部署时建议为 JS/CSS 开启 gzip 或 brotli 压缩。
+端口被占用时：`PORT=8091 pnpm dev`、`python starter.py --port 8010`。
+
+首次打开时，若浏览器里还留有旧版（IndexedDB 存储）的会话数据，会自动把它们迁移进 SQLite。
+
+部署到服务器（systemd / nginx + HTTPS / Docker）见 [DEPLOY.md](DEPLOY.md)；注意存储接口目前无鉴权，公网部署需搭配 nginx Basic Auth 等访问控制。
 
 ## 功能
 
@@ -66,7 +69,9 @@ pnpm build
 
 ## 数据与存储
 
-API Key 与设置保存在浏览器 localStorage；会话及附件原件保存在 IndexedDB，按浏览器用户配置与站点源（origin）隔离。设置 → 数据管理可关闭「在本机记住 API Key」，关闭后 Key 只存在内存中，刷新需重新输入。会话 id 会出现在地址栏 hash 中，但不包含任何对话内容。发送消息、上传附件、使用语音功能时，相应内容会提交给配置的 API 服务。
+API Key 与设置保存在浏览器 localStorage；会话、附件原件与收藏保存在本机 `data/chats.db`（SQLite 单文件，由 Python 后端读写），附件原件存在同一文件的 BLOB 列里。设置 → 数据管理可关闭「在本机记住 API Key」，关闭后 Key 只存在内存中，刷新需重新输入。会话 id 会出现在地址栏 hash 中，但不包含任何对话内容。发送消息、上传附件、使用语音功能时，相应内容会提交给配置的 API 服务。
+
+存储后端只监听 `127.0.0.1`，仅本机可访问；保存、删除与导入都在 SQLite 事务内完成，导入失败不会破坏现有数据。备份只需复制 `data/chats.db`（建议先停止后端再复制）。
 
 导入会在确认并校验成功后替换全部本地会话与附件；导出包含会话与本地可用的图片原件，不包含 API Key、设置或非图片附件原件。格式与保留范围见[历史导入导出](src/services/chat/history/README.md)。加密导出用口令派生密钥（PBKDF2 + AES-256-GCM）把 ZIP 包成加密容器，导入时输入导出口令即可解密。
 
@@ -76,15 +81,19 @@ API Key 与设置保存在浏览器 localStorage；会话及附件原件保存�
 
 | 命令          | 用途                                          |
 | ------------- | --------------------------------------------- |
-| `pnpm dev`    | 启动开发服务器（默认 8090，可用 `PORT` 覆盖） |
+| `pnpm dev`    | 启动前端开发服务器（默认 8090，`/api` 代理到 8000 的后端；可用 `PORT` 覆盖） |
+| `pnpm backend` | 启动存储后端（`http://127.0.0.1:8000`，托管 dist 与 /api） |
+| `python starter.py` | 一条命令跑生产形态：venv 自举 + 前端构建 + 起服务 + 开浏览器 |
 | `pnpm build`  | 构建到 `dist/`                                |
 | `pnpm type`   | TypeScript 类型检查                           |
 | `pnpm lint`   | oxlint 检查                                   |
 | `pnpm test`   | 编译并运行 node:test 单元测试                 |
+| `pnpm test:backend` | 运行后端 pytest 测试 |
 | `pnpm format` | oxfmt 格式化                                  |
 | `pnpm icons`  | 重新生成 PWA 图标到 `public/`                 |
 | `pnpm scss:types` | 为 CSS Modules 补齐 `*.module.scss.d.ts` |
-| `pnpm test:e2e` | 生产构建上的浏览器冒烟测试（需本机 Chrome） |
+| `pnpm scss:types:check` | 校验样式类型声明是否同步（CI 使用） |
+| `pnpm test:e2e` | 生产构建 + 真实后端上的浏览器冒烟测试（需本机 Chrome） |
 
 样式全部使用 SCSS：组件样式为 `*.module.scss`（CSS Modules），全局样式为 `*.scss`。所有组件样式都有配套 `*.module.scss.d.ts`（手写或由 `pnpm scss:types` 生成），因此类名拼写错误会在类型检查阶段暴露。rspack 先用 `sass-loader` 编译，再交给 `builtin:lightningcss-loader` 按目标浏览器降级；第三方 CSS（如 KaTeX）仍走原有的 `.css` 规则。
 
@@ -92,7 +101,7 @@ API Key 与设置保存在浏览器 localStorage；会话及附件原件保存�
 
 聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；语音使用 ASR / TTS 接口。请求包含搜索、链接阅读、标题、`latest_reminder` 等扩展，开启 Agent 时还会声明客户端工具；接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
 
-Prism 语言包与 Mermaid 依赖在构建时合并成少量异步块，避免产生几十个碎片请求。push 到 `main` 时 [CI](.github/workflows/pages.yml) 依次执行类型检查、lint、单元测试、构建和浏览器冒烟测试，然后发布 GitHub Pages。
+Prism 语言包与 Mermaid 依赖在构建时合并成少量异步块，避免产生几十个碎片请求。push 到 `main` 时 [CI](.github/workflows/ci.yml) 依次执行类型检查、样式声明校验、lint、前端单元测试、后端 pytest、构建和浏览器冒烟测试。
 
 ```text
 src/

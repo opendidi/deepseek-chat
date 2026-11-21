@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useId, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useIsMobile } from '../../app/viewport.js'
 import { useAnchoredPosition, useDelayedOpen } from './anchored.js'
@@ -41,12 +41,14 @@ export const Tooltip = ({
   }, [open, setOpen])
 
   const visible = open && !isMobile && Boolean(content)
+  const tooltipId = useId()
 
   return (
     <>
       <span
         ref={anchorRef}
         className={styles.trigger}
+        aria-describedby={visible ? tooltipId : undefined}
         onMouseEnter={() => schedule(true, ENTER_DELAY)}
         onMouseLeave={() => schedule(false, 0)}
         onFocus={() => schedule(true, ENTER_DELAY)}
@@ -58,6 +60,7 @@ export const Tooltip = ({
         ? createPortal(
             <div
               ref={floatingRef}
+              id={tooltipId}
               role="tooltip"
               className={styles.tooltip}
               style={position ?? { top: 0, left: 0, visibility: 'hidden' }}

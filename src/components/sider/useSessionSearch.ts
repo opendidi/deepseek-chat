@@ -1,22 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useChatStore } from '../../services/chat/store.js'
-import { sessionContentMatches } from '../../services/chat/search.js'
+import { searchContent, type SearchHit } from '../../services/chat/search.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 
+/** 消息级命中：跳转到具体消息时使用 */
+export type ContentMatch = {
+  sessionId: string
+  messageId: string
+  snippet: string
+}
+
 /**
- * 会话搜索：标题即时过滤；内容搜索（至少 2 个字符）防抖后逐条扫描，
- * 途中变化查询词或列表即中止旧扫描。结果保持会话列表原有顺序。
+ * 会话搜索：标题即时过滤；内容搜索（至少 2 个字符）防抖后走服务端全文索引，
+ * 结果保持会话列表原有顺序，并给出每个命中会话的首条消息级定位。
  */
 export const useSessionSearch = (query: string) => {
   const sessions = useChatStore((state) => state.sessions)
   const trimmed = query.trim()
-  const [contentIds, setContentIds] = useState<ReadonlySet<string>>(new Set())
+  const [matches, setMatches] = useState<SearchHit[]>([])
   const [scanning, setScanning] = useState(false)
 
   useEffect(() => {
     const q = trimmed.toLowerCase()
     if (q.length < 2) {
-      setContentIds(new Set())
+      setMatches([])
       setScanning(false)
       return
     }
@@ -24,19 +31,22 @@ export const useSessionSearch = (query: string) => {
     setScanning(true)
     const timer = setTimeout(() => {
       void (async () => {
-        const hits = new Set<string>()
-        for (const summary of sessions) {
-          const match = await sessionContentMatches(summary.id, q).catch(() => false)
+        try {
+          const hits = await searchContent(trimmed)
           if (cancelled) {
             return
           }
-          if (match) {
-            hits.add(summary.id)
-            setContentIds(new Set(hits))
+          // 只保留当前会话列表里存在的命中（防御性：服务器库与列表同源）
+          const known = new Set(sessions.map((session) => session.id))
+          setMatches(hits.filter((hit) => known.has(hit.sessionId)))
+        } catch {
+          if (!cancelled) {
+            setMatches([])
           }
-        }
-        if (!cancelled) {
-          setScanning(false)
+        } finally {
+          if (!cancelled) {
+            setScanning(false)
+          }
         }
       })()
     }, 300)
@@ -46,15 +56,26 @@ export const useSessionSearch = (query: string) => {
     }
   }, [trimmed, sessions])
 
+  // 每个会话只取第一条命中（用于点击后跳转到具体消息）
+  const matchBySession = useMemo(() => {
+    const map = new Map<string, ContentMatch>()
+    for (const hit of matches) {
+      if (!map.has(hit.sessionId)) {
+        map.set(hit.sessionId, hit)
+      }
+    }
+    return map
+  }, [matches])
+
   const results = useMemo<SessionSummary[] | null>(() => {
     const q = trimmed.toLowerCase()
     if (!q) {
       return null
     }
     return sessions.filter(
-      (session) => session.title.toLowerCase().includes(q) || contentIds.has(session.id)
+      (session) => session.title.toLowerCase().includes(q) || matchBySession.has(session.id)
     )
-  }, [sessions, trimmed, contentIds])
+  }, [sessions, trimmed, matchBySession])
 
-  return { results, scanning }
+  return { results, scanning, matchBySession }
 }

@@ -4,6 +4,7 @@ import { setSiderCollapsed, useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
   bindChatPersistence,
+  bindHashSync,
   initChat,
   newChat,
   retrySaveSessions,
@@ -39,6 +40,7 @@ import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { requestSiderSearchFocus } from '../components/sider/siderSearchState.js'
 import { bindPwa } from './pwa.js'
 import { InstallPrompt } from './InstallPrompt.js'
+import { AccessGate } from './AccessGate.js'
 import { useOnline } from './useOnline.js'
 import styles from './App.module.scss'
 
@@ -87,6 +89,8 @@ export const App = () => {
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
   useEffect(() => onUploadNotice(showToast), [])
   useEffect(bindChatPersistence, [])
+  // 地址栏 hash 与 activeId 双向同步（从 sessionLifecycle 的模块级副作用显式化）
+  useEffect(bindHashSync, [])
 
   // 全局快捷键：Ctrl/Cmd+K 搜索会话、Ctrl/Cmd+Shift+O 新建对话、Ctrl/Cmd+, 打开设置
   useEffect(() => {
@@ -207,6 +211,7 @@ export const App = () => {
       <PromptLibrary />
       <SelectionMenu />
       <InstallPrompt />
+      <AccessGate />
       <Toast />
     </>
   )

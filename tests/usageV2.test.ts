@@ -12,9 +12,8 @@ import {
   clearLedgerSessions,
   hideAllRecords,
   hideRecord,
-  ledgerHours,
+  ledgerInRange,
   ledgerSessions,
-  ledgerToday,
   normalizeDay,
   readHiddenRecords,
   readLedger,
@@ -112,9 +111,7 @@ test('recordUsage 按日 / 模型 / 会话记账并写 24 小时直方图', () =
   assert.equal(day.sessions['session-a'].tokens, 470)
   assert.equal(day.sessions['session-a'].requests, 1)
 
-  const hours = ledgerHours(ledger, [date])
-  assert.equal(hours[hour], 1)
-  assert.equal(ledgerToday(ledger, date).tokens, 470)
+  assert.equal(ledgerInRange(ledger, [date]).tokens, 470)
   assert.equal(ledgerSessions(ledger, [date])[0].id, 'session-a')
   assert.equal(readTodayUsage().date, date)
   assert.equal(readTodayUsage().requests, 1)
@@ -261,7 +258,9 @@ test('热力图固定 8 周、环形图/折线/小时峰值纯函数', () => {
 
 test('API Key 统一掩码为 sk-**** 加末四位', () => {
   assert.equal(maskApiKey('sk-1234567890abcd'), 'sk-****abcd')
-  assert.equal(maskApiKey('short'), 'sk-****hort')
+  // 过短的 Key 末四位即本身，整体隐藏
+  assert.equal(maskApiKey('short'), 'sk-****')
+  assert.equal(maskApiKey('abc'), 'sk-****')
   assert.equal(maskApiKey(null), '—')
   assert.equal(maskApiKey('   '), '—')
 })

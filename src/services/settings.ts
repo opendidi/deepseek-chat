@@ -4,6 +4,11 @@ import type { ChatModel } from './api/types.js'
 import type { TtsVoice } from './api/speech.js'
 import { isSafeModelId } from '../utils/modelId.js'
 import { normalizeLocation, parseLocationShape, type UserLocation } from './location.js'
+import {
+  ALL_TOOL_NAMES,
+  DEFAULT_TOOL_NAMES,
+  type ChatMode,
+} from './agent/toolConstants.js'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -47,6 +52,10 @@ type Settings = {
   autoCompress: boolean
   /** 允许模型调用浏览器端工具并自动执行多轮工具往返 */
   agentTools: boolean
+  /** 输入栏聊天模式：仅聊天 / 标准 / 完整，决定实际下发的工具集 */
+  chatMode: ChatMode
+  /** 按工具粒度开启的客户端工具名；需要授权的页面工具默认关闭 */
+  enabledToolNames: string[]
   /** 用量统计里服务端搜索/抓取是否按官方新规则免费 */
   usageFreeServerTools: boolean
   /** 今日预估费用达到该金额时提醒一次（¥）；0 表示关闭 */
@@ -79,6 +88,8 @@ const KEYS = {
   continueAfterRefusal: 'deepseek-chat:continue-after-refusal',
   autoCompress: 'deepseek-chat:auto-compress',
   agentTools: 'deepseek-chat:agent-tools',
+  chatMode: 'deepseek-chat:chat-mode',
+  enabledToolNames: 'deepseek-chat:enabled-tool-names',
   usageFreeServerTools: 'deepseek-chat:usage-free-server-tools',
   usageDailyQuota: 'deepseek-chat:usage-daily-quota',
   apiOrigin: 'deepseek-chat:api-origin',
@@ -202,8 +213,32 @@ const initialFontSize = (): FontSizePreference => {
   return saved === 's' || saved === 'l' ? saved : 'm'
 }
 
-/** 默认仍持久化，保持既有行为；显式关闭后不再把 Key 写进 localStorage。 */
-const initialRememberApiKey = () => read(KEYS.rememberApiKey) !== 'false'
+const initialChatMode = (): ChatMode => {
+  const saved = read(KEYS.chatMode)
+  return saved === 'chat' || saved === 'full' ? saved : 'standard'
+}
+
+/** 只接受注册表里的工具名；无配置时给默认名单，需要授权的页面工具不默认开启 */
+const initialEnabledTools = (): string[] => {
+  const raw = read(KEYS.enabledToolNames)
+  if (!raw) {
+    return [...DEFAULT_TOOL_NAMES]
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? ALL_TOOL_NAMES.filter((name) => parsed.includes(name))
+      : [...DEFAULT_TOOL_NAMES]
+  } catch {
+    return [...DEFAULT_TOOL_NAMES]
+  }
+}
+
+/**
+ * 「在本机记住 API Key」默认开启：本地单人应用，输入的 Key 刷新后应当还在。
+ * 显式关闭过的用户保持关闭；没动过开关的老用户与新用户一律默认记住。
+ */
+const initialRememberApiKey = (): boolean => read(KEYS.rememberApiKey) !== 'false'
 const rememberApiKeyAtStart = initialRememberApiKey()
 // 关闭持久化时抹掉可能残留的明文 Key（例如从旧版本升级、或存储写入曾失败）
 if (!rememberApiKeyAtStart) {
@@ -232,6 +267,8 @@ export const useSettings = create<Settings>(() => ({
   continueAfterRefusal: initialFlag(KEYS.continueAfterRefusal, false),
   autoCompress: initialFlag(KEYS.autoCompress, false),
   agentTools: initialFlag(KEYS.agentTools, false),
+  chatMode: initialChatMode(),
+  enabledToolNames: initialEnabledTools(),
   usageFreeServerTools: initialFlag(KEYS.usageFreeServerTools, true),
   usageDailyQuota: Math.max(0, Number(read(KEYS.usageDailyQuota)) || 0),
   apiOrigin: initialApiOrigin(),
@@ -342,6 +379,25 @@ export const setAutoCompress = (autoCompress: boolean) => {
 export const setAgentTools = (agentTools: boolean) => {
   write(KEYS.agentTools, String(agentTools))
   useSettings.setState({ agentTools })
+}
+
+export const setChatMode = (chatMode: ChatMode) => {
+  write(KEYS.chatMode, chatMode)
+  useSettings.setState({ chatMode })
+}
+
+export const setEnabledToolNames = (enabledToolNames: string[]) => {
+  const names = ALL_TOOL_NAMES.filter((name) => enabledToolNames.includes(name))
+  write(KEYS.enabledToolNames, JSON.stringify(names))
+  useSettings.setState({ enabledToolNames: names })
+}
+
+/** 按工具粒度开关；顺序始终与注册表一致 */
+export const toggleToolName = (name: string, enabled: boolean) => {
+  const current = useSettings.getState().enabledToolNames
+  setEnabledToolNames(
+    enabled ? [...new Set([...current, name])] : current.filter((item) => item !== name)
+  )
 }
 
 export const setUsageFreeServerTools = (usageFreeServerTools: boolean) => {

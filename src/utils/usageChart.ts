@@ -3,6 +3,7 @@
  * 不依赖 API 客户端或 React，便于单测。
  */
 import { formatDate } from './format.js'
+import { DAY_MS } from './time.js'
 
 export type UsageMetric = 'tokens' | 'cost' | 'replies'
 export type DailyMetric = { date: string; cost: number; tokens: number; replies: number }
@@ -88,7 +89,6 @@ export const heatLevel = (value: number, max: number): 0 | 1 | 2 | 3 => {
   return ratio > 0.6 ? 3 : ratio > 0.25 ? 2 : 1
 }
 
-const DAY_MS = 86_400_000
 
 /**
  * 活跃热力图固定「最近 8 周」：从 7 周前的周一到本周日共 56 格。

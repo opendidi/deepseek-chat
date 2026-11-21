@@ -14,7 +14,29 @@ export const normalizeSession = (session: Session): Session =>
         })),
       }
 
-/** 展示内容与请求上下文共用当前选中的分支路径。 */
+/**
+ * 消息结构签名：只包含 id 与分支关系，不包含正文。
+ * 流式逐字刷新时结构不变，组件可用它作为派生数据的依赖，避免每帧重算目录与版本。
+ */
+export const sessionStructureKey = (session: Session): string => {
+  const parts: string[] = [session.rootMessageId ?? '-']
+  for (const message of session.messages) {
+    parts.push(message.id)
+    if (message.parentId) {
+      parts.push(`p${message.parentId}`)
+    }
+    if (message.selectedChildId) {
+      parts.push(`c${message.selectedChildId}`)
+    }
+  }
+  return parts.join('|')
+}
+
+/**
+ * 展示内容与请求上下文共用当前选中的分支路径。
+ * 注意：这里必须每帧返回最新消息对象，不能缓存结果数组——流式正文更新时结构签名不变，
+ * 但消息对象内容已经变了，复用旧数组会让界面一直显示旧内容。
+ */
 export const getVisibleMessages = (session: Session): Message[] => {
   if (session.rootMessageId === undefined) {
     return session.messages

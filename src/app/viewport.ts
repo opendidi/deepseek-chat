@@ -10,10 +10,19 @@ const subscribe = (onChange: () => void) => {
 
 export const useIsMobile = () => useSyncExternalStore(subscribe, () => query.matches)
 
-const preventPageScroll = (event: TouchEvent) => {
+/** 一次触摸里是否允许原生滚动；只在 touchstart 计算，避免每帧读计算样式造成 layout thrashing */
+let scrollAllowed = false
+let trackingTouch = false
+
+const onTouchStart = (event: TouchEvent) => {
   if (event.touches.length !== 1) {
+    // 双指缩放交给浏览器
+    scrollAllowed = true
+    trackingTouch = false
     return
   }
+  trackingTouch = true
+  scrollAllowed = false
   // composedPath 会穿过 shadow DOM，否则表情面板这类自定义元素内部的滚动
   // 会因为事件重定向到宿主元素而被误判成整页滚动、直接 preventDefault。
   for (const entry of event.composedPath()) {
@@ -27,10 +36,24 @@ const preventPageScroll = (event: TouchEvent) => {
     const scrollsY = /auto|scroll/.test(style.overflowY) && entry.scrollHeight > entry.clientHeight
     const scrollsX = /auto|scroll/.test(style.overflowX) && entry.scrollWidth > entry.clientWidth
     if (scrollsY || scrollsX) {
-      return
+      scrollAllowed = true
+      break
     }
   }
-  event.preventDefault()
+}
+
+const onTouchMove = (event: TouchEvent) => {
+  if (event.touches.length !== 1) {
+    return
+  }
+  if (trackingTouch && !scrollAllowed) {
+    event.preventDefault()
+  }
+}
+
+const endTouch = () => {
+  trackingTouch = false
+  scrollAllowed = false
 }
 
 /** 阻止移动端整页滚动，保留内部可滚动区域的滚动和双指缩放。 */
@@ -39,8 +62,17 @@ export const usePreventPageScroll = (enabled: boolean) => {
     if (!enabled) {
       return
     }
-    document.addEventListener('touchmove', preventPageScroll, { passive: false })
-    return () => document.removeEventListener('touchmove', preventPageScroll)
+    document.addEventListener('touchstart', onTouchStart, { passive: true })
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    document.addEventListener('touchend', endTouch)
+    document.addEventListener('touchcancel', endTouch)
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', endTouch)
+      document.removeEventListener('touchcancel', endTouch)
+      endTouch()
+    }
   }, [enabled])
 }
 

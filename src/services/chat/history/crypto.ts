@@ -3,6 +3,9 @@
  * 密钥经 PBKDF2（SHA-256，十万次迭代）从口令推导；口令错误或密文被改动时解密抛错。
  */
 
+import { BackupError } from './errors.js'
+import { MAX_ENCRYPTED_ARCHIVE_BYTES } from './zipReader.js'
+
 const MAGIC = new TextEncoder().encode('DSENC1')
 const SALT_LENGTH = 16
 const IV_LENGTH = 12
@@ -55,6 +58,10 @@ export const encryptArchive = async (zip: Blob, password: string): Promise<Blob>
 
 /** 解密加密归档；口令错误或密文损坏时抛 ArchiveDecryptError */
 export const decryptArchive = async (file: File, password: string): Promise<Blob> => {
+  // 必须先挡住超大密文：arrayBuffer() 会一次性读入内存，此时还没有任何解压校验
+  if (file.size > MAX_ENCRYPTED_ARCHIVE_BYTES) {
+    throw new BackupError('historyImportTooLarge')
+  }
   const bytes = new Uint8Array(await file.arrayBuffer())
   if (!MAGIC.every((byte, index) => bytes[index] === byte)) {
     throw new ArchiveDecryptError()

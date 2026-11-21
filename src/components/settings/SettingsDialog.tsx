@@ -14,6 +14,8 @@ import {
 } from '../base/icons.js'
 import {
   ArchiveDecryptError,
+  BackupError,
+  MAX_ENCRYPTED_ARCHIVE_BYTES,
   archiveIsEncrypted,
   clearHistory,
   exportHistory,
@@ -27,6 +29,7 @@ import {
   setApiOrigin,
   setAgentTools,
   setAutoCompress,
+  setChatMode,
   setContinueAfterRefusal,
   setFontSize,
   setLocale,
@@ -41,6 +44,7 @@ import {
   setThemePreference,
   setTopP,
   setTtsVoice,
+  toggleToolName,
   useSettings,
   type ThemePreference,
 } from '../../services/settings.js'
@@ -55,6 +59,7 @@ import { closeSettings, useSettingsDialog, type SettingsSection } from './settin
 import { openPromptLibrary } from '../chatInput/promptLibraryState.js'
 import { UsageStatsCell } from './UsageStats.js'
 import { modelDisplayName } from '../../services/models.js'
+import { TOOL_REGISTRY } from '../../services/agent/tools.js'
 import { downloadBlob } from '../../utils/download.js'
 import styles from './Settings.module.scss'
 
@@ -115,13 +120,39 @@ const SettingsContent = () => {
           }
         }}
       >
-        <div role="tablist" className={styles.navigation}>
+        <div
+          role="tablist"
+          aria-label={t('settings')}
+          className={styles.navigation}
+          onKeyDown={(event) => {
+            const current = sections.findIndex((item) => item.value === section)
+            let next = current
+            if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+              next = (current + 1) % sections.length
+            } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+              next = (current - 1 + sections.length) % sections.length
+            } else if (event.key === 'Home') {
+              next = 0
+            } else if (event.key === 'End') {
+              next = sections.length - 1
+            } else {
+              return
+            }
+            event.preventDefault()
+            setSection(sections[next].value)
+            const tabs = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+            tabs[next]?.focus()
+          }}
+        >
           {sections.map((item) => (
             <button
               key={item.value}
+              id={`settings-tab-${item.value}`}
               type="button"
               role="tab"
               aria-selected={section === item.value}
+              aria-controls="settings-tabpanel"
+              tabIndex={section === item.value ? 0 : -1}
               className={clsx(styles.navItem, section === item.value && styles.navItemActive)}
               onClick={() => setSection(item.value)}
             >
@@ -130,7 +161,13 @@ const SettingsContent = () => {
             </button>
           ))}
         </div>
-        <div role="tabpanel" className={styles.content}>
+        <div
+          role="tabpanel"
+          id="settings-tabpanel"
+          aria-labelledby={`settings-tab-${section}`}
+          tabIndex={0}
+          className={styles.content}
+        >
           {section === 'general' ? (
             <>
               <ThemeSetting />
@@ -145,10 +182,12 @@ const SettingsContent = () => {
           ) : section === 'model' ? (
             <>
               <ModelSetting />
+              <ChatModeSetting />
               <TemperatureSetting />
               <TopPSetting />
               <MaxTokensSetting />
               <ModelSwitches />
+              <AgentToolSettings />
             </>
           ) : section === 'stats' ? (
             <Suspense fallback={<div className={styles.usageEmpty}>{t('usageLoading')}</div>}>
@@ -596,6 +635,68 @@ const ModelSwitches = () => {
   )
 }
 
+/** 聊天模式：决定实际下发给模型的工具集；输入栏也能直接切换 */
+const ChatModeSetting = () => {
+  const t = useTranslate()
+  const chatMode = useSettings((state) => state.chatMode)
+  return (
+    <SettingCell
+      label={t('settingsChatMode')}
+      description={t('settingsChatModeDesc')}
+      status={null}
+      action={
+        <Select
+          ariaLabel={t('settingsChatMode')}
+          value={chatMode}
+          options={[
+            { value: 'chat', label: t('chatModeChat') },
+            { value: 'standard', label: t('chatModeStandard') },
+            { value: 'full', label: t('chatModeFull') },
+          ]}
+          onChange={setChatMode}
+        />
+      }
+    />
+  )
+}
+
+const TOOL_LABEL_KEYS: Record<string, TranslationKey> = {
+  get_current_time: 'toolNameGetCurrentTime',
+  calculate: 'toolNameCalculate',
+  get_page_context: 'toolNameGetPageContext',
+}
+
+const TOOL_CATEGORY_KEYS = {
+  basic: 'toolCategoryBasic',
+  browser: 'toolCategoryBrowser',
+  workspace: 'toolCategoryWorkspace',
+} as const
+
+/** 按工具粒度授权，读取页面内容的工具默认关闭 */
+const AgentToolSettings = () => {
+  const t = useTranslate()
+  const enabled = useSettings((state) => state.enabledToolNames)
+  return (
+    <div className={styles.cell}>
+      <div className={styles.label}>{t('settingsAgentToolsTitle')}</div>
+      <div className={styles.description}>{t('settingsAgentToolsDesc')}</div>
+      {TOOL_REGISTRY.map((tool) => (
+        <SettingSwitch
+          key={tool.name}
+          label={t(TOOL_LABEL_KEYS[tool.name] ?? 'settingsAgentToolsTitle')}
+          description={
+            tool.requiresConsent
+              ? `${t(TOOL_CATEGORY_KEYS[tool.category])} · ${t('toolRequiresConsent')}`
+              : t(TOOL_CATEGORY_KEYS[tool.category])
+          }
+          checked={enabled.includes(tool.name)}
+          onChange={(value) => toggleToolName(tool.name, value)}
+        />
+      ))}
+    </div>
+  )
+}
+
 const TemperatureSetting = () => {
   const temperature = useSettings((state) => state.temperature)
   return (
@@ -825,17 +926,29 @@ const useHistoryImport = () => {
   const alive = useAlive()
 
   const select = (selected: File | null) => {
-    setFile(selected)
+    setFile(null)
+    setEncrypted(false)
     setPassword('')
-    if (selected) {
-      void archiveIsEncrypted(selected).then((value) => {
+    if (!selected) {
+      return
+    }
+    if (selected.size > MAX_ENCRYPTED_ARCHIVE_BYTES) {
+      setStatus({ key: 'historyImportTooLarge', error: true })
+      return
+    }
+    setFile(selected)
+    void archiveIsEncrypted(selected)
+      .then((value) => {
         if (alive.current) {
           setEncrypted(value)
         }
       })
-    } else {
-      setEncrypted(false)
-    }
+      .catch(() => {
+        if (alive.current) {
+          setEncrypted(false)
+          setStatus({ key: 'historyImportFailed', error: true })
+        }
+      })
   }
 
   const confirm = async () => {
@@ -861,7 +974,9 @@ const useHistoryImport = () => {
         setStatus(
           error instanceof ArchiveDecryptError
             ? { key: 'importWrongPassword', error: true }
-            : { key: 'historyImportFailed', error: true }
+            : error instanceof BackupError
+              ? { key: error.key, error: true }
+              : { key: 'historyImportFailed', error: true }
         )
       }
     } finally {
