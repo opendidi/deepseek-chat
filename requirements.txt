@@ -1,6 +1,9 @@
+# -*- coding: utf-8 -*-
+# 本行编码声明必须保留在首行：pip 在中文 Windows（GBK 本地编码）下解析本文件时，
+# 若无声明会把 UTF-8 中文注释按 GBK 读而报 UnicodeDecodeError。
 # 后端依赖完整锁定清单：直接依赖 + 传递依赖的实测版本。
 # 固定版本保证任何平台（含 ARM 开发板）安装结果与开发/CI 环境完全一致；
-# 升级某个包后请重新生成本文件（.venv/Scripts/python -m pip freeze > requirements.txt）。
+# 升级某个包后请重新生成本文件，并保留首行编码声明（.venv/Scripts/python -m pip freeze > requirements.txt 会丢掉它，需补回）。
 # 用法：pip install -r requirements.txt（运行 + 测试一把装齐）。
 annotated-doc==0.0.7
 annotated-types==0.8.0
