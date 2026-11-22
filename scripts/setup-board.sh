@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# 开发板一键部署：systemd 自启动 + nginx 反代 + 前端静态托管
+# 开发板一键部署：仅 Python 服务（uvicorn 托管前端 + API），systemd 自启动
 # 用法（在板子上）：sudo bash scripts/setup-board.sh
 # 可用环境变量覆盖默认值：
 #   PROJECT_DIR=/mnt/usb/deepseek   项目根目录（含 .venv 与 dist/）
 #   SERVICE_USER=xiaodi             服务运行用户
-#   BACKEND_PORT=8000               后端监听端口（nginx 转发目标）
+#   BACKEND_PORT=8000               服务监听端口（0.0.0.0 对局域网开放）
 # 幂等：重复执行会覆盖配置并重启服务；本脚本等价于 DEPLOY.md 第 6.3 节的手工步骤。
+# 不装 nginx：uvicorn 直接对外，前端页面与 /api 同端口；需要 nginx 反代时见 DEPLOY.md 第 4 节。
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/mnt/usb/deepseek}"
 SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-xiaodi}}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 UNIT_FILE=/etc/systemd/system/deepseek-chat.service
-NGINX_SITE=/etc/nginx/sites-available/deepseek-chat
 
 say() { echo "[setup-board] $*"; }
 die() { echo "[setup-board] ✗ $*" >&2; exit 1; }
@@ -36,56 +36,28 @@ $mount_line
 
 [Service]
 WorkingDirectory=$PROJECT_DIR
-ExecStart=$PROJECT_DIR/.venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port $BACKEND_PORT
+ExecStart=$PROJECT_DIR/.venv/bin/python -m uvicorn server.app:app --host 0.0.0.0 --port $BACKEND_PORT
 Restart=always
 RestartSec=3
 User=$SERVICE_USER
 Environment=DATA_DIR=$PROJECT_DIR/data
-Environment=SERVE_DIST=0
 # Environment=ACCESS_PASSWORD=change-me
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# 2) nginx：静态出 dist，/api 反代后端（proxy_pass 结尾不带斜杠；SSE 关缓冲）
-if ! command -v nginx >/dev/null 2>&1; then
-  say "未安装 nginx，尝试 apt 安装 ..."
-  apt-get update -qq && apt-get install -y -qq nginx
-fi
-say "写入 nginx 站点：$NGINX_SITE"
-cat > "$NGINX_SITE" <<'NGINX'
-server {
-    listen 80 default_server;
-    server_name _;
-
-    client_max_body_size 100m;   # 导入 / 附件上传的上限
-
-    gzip on;
-    gzip_proxied any;
-    gzip_types application/json application/javascript text/css;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;    # 结尾【不要】带斜杠，否则 /api 前缀被剥掉
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_http_version 1.1;
-        proxy_buffering off;                 # 聊天回复是 SSE 流式，缓冲会卡住打字机效果
-        proxy_read_timeout 300s;
-    }
-
-    location / {
-        root __DIST_DIR__;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-}
-NGINX
-sed -i "s|__DIST_DIR__|$PROJECT_DIR/dist|" "$NGINX_SITE"
-
-# 3) dist 对 nginx worker 可读（FAT/exFAT 上 chmod 是空操作，忽略报错）
+# 2) dist 对服务用户可读（服务通常就是该用户装的，多数情况本就满足）
 chmod -R a+rX "$PROJECT_DIR/dist" 2>/dev/null || true
+
+# 3) 清理此前一键脚本创建的 nginx 站点（如有），避免两套入口混淆
+if [ -e /etc/nginx/sites-enabled/deepseek-chat ]; then
+  say "移除旧的一键脚本 nginx 站点（只保留 Python 服务）..."
+  rm -f /etc/nginx/sites-enabled/deepseek-chat /etc/nginx/sites-available/deepseek-chat
+  if command -v nginx >/dev/null 2>&1; then
+    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+  fi
+fi
 
 # 4) 启用服务
 say "启用 systemd 服务 ..."
@@ -93,20 +65,12 @@ systemctl daemon-reload
 systemctl enable deepseek-chat >/dev/null
 systemctl restart deepseek-chat
 
-say "启用 nginx 站点 ..."
-ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/deepseek-chat
-if [ -e /etc/nginx/sites-enabled/default ]; then
-  rm -f /etc/nginx/sites-enabled/default
-fi
-nginx -t
-systemctl restart nginx
-
 # 5) 结果摘要
 board_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 say "────────────────────────────────────────────"
-say "部署完成 ✓"
+say "部署完成 ✓（仅 Python 服务，无 nginx）"
 say "  服务状态：systemctl status deepseek-chat"
 say "  本机验证：curl http://127.0.0.1:$BACKEND_PORT/api/health"
-say "  局域网  ：http://${board_ip:-<板子IP>}/"
+say "  局域网  ：http://${board_ip:-<板子IP>}:$BACKEND_PORT/   （前端页面与 /api 同端口）"
 say "  日志    ：journalctl -u deepseek-chat -f"
 say "────────────────────────────────────────────"
