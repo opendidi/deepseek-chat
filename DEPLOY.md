@@ -354,12 +354,12 @@ uv venv --python 3.11 --seed .venv      # --seed 装入 pip，依赖安装与系
 - 服务只做存储代理，不碰 CUDA / JetPack 机器学习组件。
 - 其余（SD 卡磨损、DATA_DIR、访问口令）见 6.4。
 
-### 6.3 板子上 systemd + nginx 组合（U 盘布局可直接粘贴）
+### 6.3 板子上 systemd 自启动（U 盘布局可直接粘贴）
 
-> 一键脚本：`sudo bash scripts/setup-board.sh`（等价于本节全部手工步骤，幂等可重跑；
-> 可用 `PROJECT_DIR=` `SERVICE_USER=` `BACKEND_PORT=` 环境变量覆盖默认值）。
-> 以下为手工步骤，便于理解各配置的作用。
-
+> 一键脚本：`sudo bash scripts/setup-board.sh` —— 只部署 Python 服务：uvicorn 在
+> `0.0.0.0:8000` 同时托管前端页面与 /api（不装 nginx），systemd 负责自启动与崩溃拉起。
+> 幂等可重跑；`PROJECT_DIR=` `SERVICE_USER=` `BACKEND_PORT=` 环境变量可覆盖默认值；
+> 脚本还会自动清理此前一键脚本创建的 nginx 站点。需要 nginx 时见第 4 节。
 
 ```ini
 # /etc/systemd/system/deepseek-chat.service
@@ -371,7 +371,7 @@ RequiresMountsFor=/mnt/usb/deepseek
 
 [Service]
 WorkingDirectory=/mnt/usb/deepseek
-ExecStart=/mnt/usb/deepseek/.venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8000
+ExecStart=/mnt/usb/deepseek/.venv/bin/python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3
 User=xiaodi
@@ -382,16 +382,16 @@ Environment=DATA_DIR=/mnt/usb/deepseek/data
 WantedBy=multi-user.target
 ```
 
-nginx 配置与启用命令见第 4 节（4.1 全转发最省心；4.2 需要注意 root 与权限）。启用：
+启用：
 
 ```sh
 sudo systemctl daemon-reload
 sudo systemctl enable --now deepseek-chat
-sudo ln -sf /etc/nginx/sites-available/deepseek-chat /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl restart nginx
-# 局域网验证：浏览器打开 http://板子IP/ 与 http://板子IP/api/health
+# 局域网验证：浏览器打开 http://板子IP:8000/ 与 http://板子IP:8000/api/health
 ```
+
+可选增强：需要 gzip 收敛、HTTPS、Basic Auth 或统一 80 入口时，再按第 4 节加 nginx
+（后端改回 `--host 127.0.0.1` 并在 unit 里加 `Environment=SERVE_DIST=0` 切成纯 API）。
 
 ### 6.4 板子特有的注意事项
 

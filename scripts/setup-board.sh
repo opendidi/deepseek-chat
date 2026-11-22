@@ -19,7 +19,6 @@ die() { echo "[setup-board] ✗ $*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "请用 sudo 运行：sudo bash scripts/setup-board.sh"
 [ -x "$PROJECT_DIR/.venv/bin/python" ] || die "缺少 $PROJECT_DIR/.venv/bin/python —— 先按 DEPLOY.md 6.2 用 uv 创建环境"
-[ -f "$PROJECT_DIR/dist/index.html" ] || die "缺少 $PROJECT_DIR/dist/index.html —— 先在电脑上 pnpm build 并上传 dist/"
 getent passwd "$SERVICE_USER" >/dev/null || die "用户 $SERVICE_USER 不存在"
 
 # 1) systemd unit：开机自启 + 崩溃拉起；U 盘布局时等挂载就绪
