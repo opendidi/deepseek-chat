@@ -132,6 +132,53 @@ services:
 
 ---
 
+## 方式五：开发板（树莓派等 ARM Linux 单板机）
+
+适用：树莓派 4/5、Orange Pi 等跑 **Debian 系 arm64 系统**（如 Raspberry Pi OS Bookworm）的板子。
+后端依赖全部为纯 Python（pydantic-core 有 aarch64 预编译 wheel），板子上**无需安装编译器**；
+前端在电脑上构建好再上传，板子不需要 Node。
+
+### 1. 电脑上构建前端
+
+```sh
+pnpm install && pnpm build    # 产出 dist/
+```
+
+### 2. 上传到板子（或板子 git clone 后只补传 dist/）
+
+```sh
+# <板子IP> 换成实际地址；同网段也可以用主机名（树莓派默认 raspberrypi.local）
+scp -r dist server requirements.txt starter.py 用户名@板子IP:~/deepseek-chat/
+```
+
+### 3. 板子上装后端并启动
+
+```sh
+cd ~/deepseek-chat
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
+```
+
+浏览器访问 `http://板子IP:8000`（或 `http://raspberrypi.local:8000`）；防火墙放行 8000。
+
+### 4. 常驻（systemd，开机自启）
+
+用方式二的 unit 文件，注意两点：`WorkingDirectory` 改成板子上的项目路径；
+板上 Python 若低于 3.11（旧版 Bullseye 系统是 3.9），先装 3.11+（`apt` 源没有就用
+`uv venv --python 3.11` 或 pyenv），`ExecStart` 指向对应解释器。
+
+### 板子特有的注意事项
+
+- **Python ≥ 3.11**：Bookworm 系统自带 3.11 可直接用；Bullseye 及更旧的系统需要先升级 Python。
+- **存储介质**：默认 `data/` 在 SD 卡上，SQLite WAL 长期写入有磨损，也建议插 SSD/NVMe 时用
+  `DATA_DIR=/mnt/ssd/deepseek-chat/data` 指过去。
+- **内存**：512MB 即可运行（uvicorn 单进程 + SQLite）；GZip 已内置，局域网传输量小。
+- **DeepSeek API Key**：请求由各访问者的浏览器直发，板上不需要配置任何 Key。
+- **公网/多人访问**：与方式一相同，务必配 `ACCESS_PASSWORD`（`.env` 或 systemd Environment）。
+
+---
+
 ## 数据与运维
 
 - **备份**：停服后复制 `data/chats.db`（附件原件也在其中）；`DATA_DIR` 环境变量可改位置。
