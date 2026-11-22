@@ -15,7 +15,6 @@ import { continueReply, regenerateReply } from '../../services/chat/store.js'
 import { toggleFavorite, useFavorites } from '../../services/chat/favorites.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import type { AssistantMessage as AssistantMessageType } from '../../services/chat/types.js'
-import { openSettings } from '../settings/settingsDialogState.js'
 import { IconButton } from '../base/IconButton.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { Button } from '../base/Button.js'
@@ -141,18 +140,6 @@ export const AssistantMessage = memo(function AssistantMessage({
           <IconWarningOutline16 />
           <span>
             {notice.text}
-            {notice.action === 'apiKey' ? (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  className={styles.noticeAction}
-                  onClick={() => openSettings('data')}
-                >
-                  {t('changeApiKey')}
-                </button>
-              </>
-            ) : null}
             {notice.action === 'topUp' ? (
               <>
                 {' '}

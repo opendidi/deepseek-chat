@@ -32,5 +32,10 @@ _load_env_file(REPO_ROOT / '.env')
 
 AMAP_KEY = os.environ.get('AMAP_KEY') or ''
 
+# DeepSeek 模型 API：浏览器不再持有 Key，统一经 /api/deepseek/* 代理。
+# 上游地址可覆盖（自建兼容网关 / 测试 mock），默认官方 Anthropic 兼容端点。
+DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY') or ''
+DEEPSEEK_BASE_URL = (os.environ.get('DEEPSEEK_BASE_URL') or 'https://api.deepseek.com').rstrip('/')
+
 DATA_DIR = Path(os.environ.get('DATA_DIR') or REPO_ROOT / 'data')
 DIST_DIR = Path(os.environ.get('DIST_DIR') or REPO_ROOT / 'dist')

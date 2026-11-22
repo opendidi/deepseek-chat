@@ -21,11 +21,8 @@ export type FontSizePreference = 's' | 'm' | 'l'
 
 import './storageKeys.js'
 
-/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
+/** 本机设置，存 localStorage：语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态。模型 API Key 已移至服务端 .env。 */
 type Settings = {
-  apiKey: string | null
-  /** 关闭后 API Key 只保存在内存中，刷新页面即需重新输入 */
-  rememberApiKey: boolean
   locale: Locale
   themePreference: ThemePreference
   location: UserLocation | null
@@ -70,8 +67,6 @@ type Settings = {
 }
 
 const KEYS = {
-  apiKey: 'deepseek-chat:api-key',
-  rememberApiKey: 'deepseek-chat:remember-api-key',
   locale: 'deepseek-chat:locale',
   location: 'deepseek-chat:location',
   themePreference: 'deepseek-chat:theme-preference',
@@ -237,22 +232,17 @@ const initialEnabledTools = (): string[] => {
   }
 }
 
-/**
- * 「在本机记住 API Key」默认开启：本地单人应用，输入的 Key 刷新后应当还在。
- * 显式关闭过的用户保持关闭；没动过开关的老用户与新用户一律默认记住。
- */
-const initialRememberApiKey = (): boolean => read(KEYS.rememberApiKey) !== 'false'
-const rememberApiKeyAtStart = initialRememberApiKey()
-// 关闭持久化时抹掉可能残留的明文 Key（例如从旧版本升级、或存储写入曾失败）
-if (!rememberApiKeyAtStart) {
-  write(KEYS.apiKey, null)
+// 清理旧版本残留在 localStorage 的明文 Key：Key 现在只存服务端 .env，浏览器不应再保留副本。
+try {
+  write('deepseek-chat:api-key', null)
+  write('deepseek-chat:remember-api-key', null)
+} catch {
+  // 存储不可用时不阻塞启动
 }
 
 const savedLocation = initialLocation()
 
 export const useSettings = create<Settings>(() => ({
-  apiKey: rememberApiKeyAtStart ? read(KEYS.apiKey) : null,
-  rememberApiKey: rememberApiKeyAtStart,
   locale: initialLocale(),
   location: savedLocation,
   themePreference: initialThemePreference(),
@@ -309,19 +299,6 @@ export const setThemePreference = (themePreference: ThemePreference) => {
 export const setTtsVoice = (ttsVoice: TtsVoice) => {
   write(KEYS.ttsVoice, ttsVoice)
   useSettings.setState({ ttsVoice })
-}
-
-export const setApiKey = (apiKey: string | null) => {
-  // 关闭「保存到本机」时只更新内存状态，Key 不会落到磁盘
-  write(KEYS.apiKey, useSettings.getState().rememberApiKey ? apiKey : null)
-  useSettings.setState({ apiKey })
-}
-
-/** 关闭时立即抹掉磁盘上的明文；重新开启时把当前会话的 Key 补写回本机。 */
-export const setRememberApiKey = (remember: boolean) => {
-  write(KEYS.rememberApiKey, String(remember))
-  write(KEYS.apiKey, remember ? useSettings.getState().apiKey : null)
-  useSettings.setState({ rememberApiKey: remember })
 }
 
 export const setThinking = (thinking: boolean) => {

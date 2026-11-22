@@ -18,7 +18,7 @@ import { PromptLibrary } from '../components/chatInput/PromptLibrary.js'
 import { SessionView } from '../components/session/SessionView.js'
 import { MobileHeader } from '../components/session/MobileHeader.js'
 import { Welcome } from '../components/session/Welcome.js'
-import { ensureApiKey, openSettings } from '../components/settings/settingsDialogState.js'
+import { openSettings } from '../components/settings/settingsDialogState.js'
 
 // 设置弹窗整块懒加载：主包只保留打开状态（settingsDialogState），首次打开设置时才拉取代码
 const SettingsDialog = lazy(() =>
@@ -141,8 +141,6 @@ export const App = () => {
   useEffect(() => {
     void initChat()
     void initFavorites()
-    // 首次打开先在设置里输入 API Key
-    ensureApiKey()
     // 安装入口与新版本提示（仅生产构建注册 SW 的环境有意义）
     bindPwa()
   }, [])

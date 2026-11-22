@@ -7,7 +7,7 @@ export type Notice = {
   /** 模板答复使用正文样式；其余统一为红色错误提示。 */
   presentation?: 'response'
   /** 需要用户处理的问题附带的操作 */
-  action?: 'apiKey' | 'topUp'
+  action?: 'topUp'
 }
 
 const getTemplateText = (reply: AssistantMessage) =>
@@ -31,9 +31,13 @@ export const describeReply = (reply: AssistantMessage): Notice | null => {
     if (kind === 'network') {
       return { text: translate('commonNetworkErrorToast') }
     }
+    // 服务端没配 Key：提示部署方配置，不再引导用户去前端输入
+    if (kind === 'keyMissing') {
+      return { text: translate('replyServerKeyMissing') }
+    }
     switch (classifyStatus(status)) {
       case 'unauthorized':
-        return { text: translate('replyInvalidApiKey'), action: 'apiKey' }
+        return { text: translate('replyInvalidApiKey') }
       case 'insufficientBalance':
         return { text: translate('replyInsufficientBalance'), action: 'topUp' }
       case 'rateLimited':

@@ -19,7 +19,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import AMAP_KEY, DATA_DIR, DIST_DIR
+from .config import AMAP_KEY, DATA_DIR, DEEPSEEK_API_KEY, DIST_DIR
 from .routers import ROUTERS
 from .storage import configure
 
@@ -89,7 +89,7 @@ async def static_cache_headers(request: Request, call_next):
 
 @app.get('/api/health')
 def health() -> dict:
-    return {'ok': True, 'amap': bool(AMAP_KEY)}
+    return {'ok': True, 'amap': bool(AMAP_KEY), 'deepseek': bool(DEEPSEEK_API_KEY)}
 
 
 for _router in ROUTERS:

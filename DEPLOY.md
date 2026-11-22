@@ -22,8 +22,8 @@ deepseek-chat 的完整部署手册：本地开发、服务器、Docker、ARM �
 
 - **前端**（React 构建产物 `dist/`）与**后端**（FastAPI + SQLite，`server/`）是两个独立服务；
   生产单端口形态下由后端同时托管两者。
-- **DeepSeek API 请求始终由访问者的浏览器直发**（各自填自己的 API Key）——服务器上没有、
-  也不需要任何 Key。
+- **DeepSeek API Key 只存在服务器的 `.env`**（`DEEPSEEK_API_KEY`），浏览器不持有 Key；
+  聊天、附件、语音、模型列表全部经 `/api/deepseek/*` 由服务端代理转发。换设备无需重新配置。
 - 所有访问者**共享同一个** `data/chats.db`（会话历史共用一份），删除操作影响所有人。
 - ⚠️ **存储接口默认无鉴权**：公网部署务必设置 `ACCESS_PASSWORD`（应用内口令，已实现，
   前端会弹输入门）或 nginx Basic Auth，否则任何人都能读写、删除全部会话。
@@ -33,14 +33,14 @@ deepseek-chat 的完整部署手册：本地开发、服务器、Docker、ARM �
 ### 运行拓扑
 
 ```text
-浏览器（局域网设备 / 公网）
-  │  各自填 DeepSeek API Key，请求由浏览器直发 api.deepseek.com
+浏览器（局域网设备 / 公网）——无需配置 Key
   ▼
 nginx :80（可选：gzip / HTTPS / Basic Auth / SSE 关缓冲）
   ▼
 uvicorn :8000（127.0.0.1，systemd 常驻）
   ├── 托管 dist/ 静态产物（带 hash 资源下发一年 immutable 缓存）
   ├── /api/* 存储接口（GZip 压缩）
+  └── /api/deepseek/* 模型代理（从 .env 读 Key 转发 api.deepseek.com）
   ▼
 SQLite data/chats.db（WAL 模式，含附件原件）
 ```
@@ -123,6 +123,8 @@ User=xiaodi
 Environment=DATA_DIR=/opt/deepseek-chat/data
 # 可选：访问口令（或改用 EnvironmentFile=/opt/deepseek-chat/.env）
 # Environment=ACCESS_PASSWORD=change-me
+# 必需：DeepSeek API Key（模型调用，浏览器不配置）
+Environment=DEEPSEEK_API_KEY=your-deepseek-api-key
 # 可选：高德 Web 服务 Key（Agent 地图工具）
 # Environment=AMAP_KEY=your-amap-web-service-key
 
@@ -403,7 +405,8 @@ sudo systemctl enable --now deepseek-chat
 - **U 盘文件系统**：exFAT / FAT32 上 WAL 不可用、权限位不完整——建议格式化为 ext4，
   或把 DATA_DIR 指到 ext4 位置。
 - **内存**：512MB 即可运行（uvicorn 单进程 + SQLite）；GZip 已内置。
-- **DeepSeek API Key**：请求由各访问者的浏览器直发，板上不需要配置任何 Key。
+- **DeepSeek API Key**：必须在 `.env` 或 systemd Environment 配置 `DEEPSEEK_API_KEY`，
+  换终端无需重新输入；所有模型流量都走开发板 outbound 网络。
 - **公网/多人访问**：务必配 `ACCESS_PASSWORD`（`.env` 或 systemd Environment）。
 
 ### 6.5 离线安装（板子没网 / Python 缺 ssl）

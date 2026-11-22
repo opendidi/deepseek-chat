@@ -2,21 +2,15 @@
 declare const styles: {
   readonly amapKeyBlock: string
   readonly amapKeyHint: string
-  readonly apiKey: string
-  readonly apiKeyInput: string
-  readonly apiKeyMask: string
-  readonly apiKeySaved: string
   readonly cell: string
   readonly cellButton: string
   readonly citySelect: string
-  readonly confirm: string
   readonly content: string
   readonly deleteActions: string
   readonly deleteConfirm: string
   readonly description: string
   readonly dialog: string
   readonly dialogMain: string
-  readonly divider: string
   readonly error: string
   readonly exportFields: string
   readonly importConfirm: string
@@ -25,7 +19,6 @@ declare const styles: {
   readonly label: string
   readonly locationCell: string
   readonly locationSelectors: string
-  readonly mobileConfirm: string
   readonly modelBadge: string
   readonly navItem: string
   readonly navItemActive: string

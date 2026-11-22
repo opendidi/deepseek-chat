@@ -35,7 +35,6 @@ import {
 } from '../../services/chat/inputHistory.js'
 import { IconButton } from '../base/IconButton.js'
 import { Tooltip } from '../base/Tooltip.js'
-import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { showToast } from '../base/toastState.js'
 import { ModelPicker } from './ModelPicker.js'
@@ -123,18 +122,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }, [t])
 
   const acceptFiles = (files: File[]) => {
-    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
+    if (files.length === 0 || useChatStore.getState().importingHistory) {
       return
     }
-    const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
+    const error = addDraftFiles(sessionId, files)
     if (error) {
       showToast(error)
     }
   }
   const retryFile = useCallback(
     (id: string) => {
-      if (!useChatStore.getState().importingHistory && ensureApiKey()) {
-        retryDraftAttachment(sessionId, id, useSettings.getState().apiKey ?? '')
+      if (!useChatStore.getState().importingHistory) {
+        retryDraftAttachment(sessionId, id)
       }
     },
     [sessionId]
@@ -212,7 +211,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     }
     const sentText = getDraft(sessionId).text
     // 文本与上传完成态由提交动作读取最新快照，不使用上一次渲染的草稿。
-    if (!ensureApiKey() || !sendMessage(sessionId)) {
+    if (!sendMessage(sessionId)) {
       return
     }
     recordInputHistory(sentText)
@@ -475,10 +474,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             disabled={!voice.available}
             seconds={voice.seconds}
             onClick={() => {
-              if (
-                voice.status !== 'idle' ||
-                (!useChatStore.getState().importingHistory && ensureApiKey())
-              ) {
+              if (voice.status !== 'idle' || !useChatStore.getState().importingHistory) {
                 void voice.toggle()
               }
             }}
@@ -490,7 +486,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             tooltip={`${t('uploadFileDesc')}\n${t('dragFileDesc', { count: MAX_COUNT, size: MAX_SIZE_MB })}`}
             ariaLabel={t('uploadFile')}
             disabled={importingHistory}
-            onClick={() => ensureApiKey() && fileInputRef.current?.click()}
+            onClick={() => fileInputRef.current?.click()}
           />
           <input
             ref={fileInputRef}

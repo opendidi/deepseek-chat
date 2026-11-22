@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-基于 DeepSeek API 的本地聊天应用：React 前端 + Python（FastAPI + SQLite）存储后端。对话、附件与收藏保存在本机 `data/chats.db` 单文件里，API Key 只保存在本机。
+基于 DeepSeek API 的本地聊天应用：React 前端 + Python（FastAPI + SQLite）存储后端。对话、附件与收藏保存在本机 `data/chats.db` 单文件里，API Key 只保存在服务端 `.env`（`DEEPSEEK_API_KEY`），浏览器无需配置。
 
 - 本仓库 push 到 `main` 时，`.github/workflows/ci.yml` 会自动运行类型检查、lint、前后端测试与浏览器冒烟测试。
 
@@ -70,13 +70,13 @@ pnpm dev                      # 终端 2：前端开发服务器（http://localh
 
 ## 数据与存储
 
-API Key 与设置保存在浏览器 localStorage；会话、附件原件与收藏保存在本机 `data/chats.db`（SQLite 单文件，由 Python 后端读写），附件原件存在同一文件的 BLOB 列里。设置 → 数据管理可关闭「在本机记住 API Key」，关闭后 Key 只存在内存中，刷新需重新输入。会话 id 会出现在地址栏 hash 中，但不包含任何对话内容。发送消息、上传附件、使用语音功能时，相应内容会提交给配置的 API 服务。
+设置保存在浏览器 localStorage；API Key 只存服务端 `.env`，浏览器不持有。会话、附件原件与收藏保存在本机 `data/chats.db`（SQLite 单文件，由 Python 后端读写），附件原件存在同一文件的 BLOB 列里。会话 id 会出现在地址栏 hash 中，但不包含任何对话内容。发送消息、上传附件、使用语音功能时，请求经服务端 `/api/deepseek/*` 代理转发，Key 只由服务端注入。
 
 存储后端只监听 `127.0.0.1`，仅本机可访问；保存、删除与导入都在 SQLite 事务内完成，导入失败不会破坏现有数据。备份只需复制 `data/chats.db`（建议先停止后端再复制）。
 
-导入会在确认并校验成功后替换全部本地会话与附件；导出包含会话与本地可用的图片原件，不包含 API Key、设置或非图片附件原件。格式与保留范围见[历史导入导出](src/services/chat/history/README.md)。加密导出用口令派生密钥（PBKDF2 + AES-256-GCM）把 ZIP 包成加密容器，导入时输入导出口令即可解密。
+导入会在确认并校验成功后替换全部本地会话与附件；导出包含会话与本地可用的图片原件，不包含设置或非图片附件原件。格式与保留范围见[历史导入导出](src/services/chat/history/README.md)。加密导出用口令派生密钥（PBKDF2 + AES-256-GCM）把 ZIP 包成加密容器，导入时输入导出口令即可解密。
 
-设置 → 数据管理 → 删除所有对话，会在确认后清空全部本地会话、附件原件和未发送的草稿，停止正在生成的回复并回到新对话。API Key 和其他设置保留，已上传到 API 服务的文件不受影响。
+设置 → 数据管理 → 删除所有对话，会在确认后清空全部本地会话、附件原件和未发送的草稿，停止正在生成的回复并回到新对话。设置保留，已上传到 API 服务的文件不受影响。
 
 ## 开发
 

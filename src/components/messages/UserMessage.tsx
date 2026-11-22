@@ -8,7 +8,6 @@ import { stopReadAloud } from '../../services/speech/readAloud.js'
 import type { UserMessage as UserMessageType } from '../../services/chat/types.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
-import { ensureApiKey } from '../settings/settingsDialogState.js'
 import {
   BranchSwitcher,
   type MessageVersions,
@@ -69,7 +68,7 @@ export const UserMessage = memo(function UserMessage({
 
   const sendEdit = () => {
     const next = formatQuotedContent(draft.trim(), quotes)
-    if (canSend && ensureApiKey() && editMessage(sessionId, message.id, next)) {
+    if (canSend && editMessage(sessionId, message.id, next)) {
       stopReadAloud()
       setEditing(false)
     }

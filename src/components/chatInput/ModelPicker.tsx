@@ -10,7 +10,6 @@ import {
   modelDisplayName,
   type ModelInfo,
 } from '../../services/models.js'
-import { useSettings } from '../../services/settings.js'
 import { useAnchoredPosition, useDismiss } from '../base/anchored.js'
 import { IconCheckOutline16, IconChevronDownOutline14, IconModelOutline14, IconRefreshOutline16 } from '../base/icons.js'
 import { Tooltip } from '../base/Tooltip.js'
@@ -43,18 +42,13 @@ export const ModelPicker = ({
   const models = source === 'cloud' && cloudModels.length > 0 ? cloudModels : BUILTIN_MODELS
 
   const fetchFromCloud = async () => {
-    const apiKey = useSettings.getState().apiKey
-    if (!apiKey) {
-      setError(t('modelNeedApiKey'))
-      return
-    }
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
     setLoading(true)
     setError(null)
     try {
-      const list = await fetchCloudModels(apiKey, controller.signal)
+      const list = await fetchCloudModels(controller.signal)
       if (controller.signal.aborted) {
         return
       }

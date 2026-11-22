@@ -1,4 +1,4 @@
-import { getApiOrigin, request } from './api/client.js'
+import { request } from './api/client.js'
 import type { ChatModel } from './api/types.js'
 import { parseModelIds } from '../utils/modelId.js'
 
@@ -38,10 +38,9 @@ export const modelDisplayName = (id: ChatModel): string =>
   BUILTIN_MODELS.find((model) => model.id === id)?.name ?? id
 
 /** GET /models：拉取服务端可用模型；与内置 id 相同的会补上本地定价 */
-export const fetchCloudModels = async (apiKey: string, signal?: AbortSignal): Promise<ModelInfo[]> => {
-  const response = await request(`${getApiOrigin()}/models`, {
+export const fetchCloudModels = async (signal?: AbortSignal): Promise<ModelInfo[]> => {
+  const response = await request('/api/deepseek/models', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${apiKey}` },
     signal,
   })
   let payload: unknown

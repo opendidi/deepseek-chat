@@ -1,5 +1,5 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
-import { useSettings } from '../settings.js'
+import { getAccessKey, notifyUnauthorized } from '../chat/accessKey.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
 import type {
@@ -10,16 +10,11 @@ import type {
   MessageStreamEvent,
 } from './types.js'
 
-/** 构建期 API 地址，默认 https://api.deepseek.com；本地开发支持开发服务器代理 */
-export const API_ORIGIN = __API_ORIGIN__
-
-/** 运行时 API 地址：设置里自定义后覆盖构建期默认值 */
-export const getApiOrigin = (): string => useSettings.getState().apiOrigin ?? API_ORIGIN
-
-/** Anthropic 兼容接口的前缀 */
-const anthropicBaseUrl = () => `${getApiOrigin()}/anthropic/v1`
-/** 引用 Files API 上传的图片、调用 Anthropic 兼容 Files API 时必须携带 */
-const FILES_BETA = 'files-api-2025-04-14'
+/**
+ * 模型 API 地址：一律走本机 FastAPI 的 /api/deepseek 代理，Key 只存在于服务端 .env。
+ * 开发模式由 devServer 代理 /api 到 127.0.0.1:8000，生产模式与后端同源。
+ */
+const DEEPSEEK_PROXY = '/api/deepseek'
 
 export type ApiErrorKind =
   /** 非 2xx 响应 */
@@ -32,22 +27,28 @@ export type ApiErrorKind =
   | 'interrupted'
   /** 响应不符合协议（如非 SSE 响应） */
   | 'protocol'
+  /** 服务端未配置 DEEPSEEK_API_KEY */
+  | 'keyMissing'
 
 export class ApiError extends Error {
   readonly localMessage?: TranslationMessage
+  /** 服务端错误码：DEEPSEEK_KEY_MISSING / UPSTREAM_ERROR 等 */
+  readonly code?: string
 
   constructor(
     readonly kind: ApiErrorKind,
     message: string | TranslationMessage,
-    readonly status?: number
+    readonly status?: number,
+    code?: string
   ) {
     super(typeof message === 'string' ? message : translate(message.key, message.params))
     this.name = 'ApiError'
     this.localMessage = typeof message === 'string' ? undefined : message
+    this.code = code
   }
 }
 
-const isErrorBody = (value: unknown): value is ApiErrorBody =>
+const isErrorBody = (value: unknown): value is ApiErrorBody & { code?: string } =>
   typeof value === 'object' &&
   value !== null &&
   'error' in value &&
@@ -60,26 +61,45 @@ const readErrorResponse = async (
 ): Promise<ApiError> => {
   const text = await response.text().catch(() => '')
   let message = text || fallback
+  let code: string | undefined
   try {
     const body: unknown = JSON.parse(text)
     if (isErrorBody(body)) {
       message = body.error.message
+      code = body.code
+    } else if (typeof body === 'object' && body !== null) {
+      // 代理层错误形如 {"detail":"...","code":"..."}
+      const detail = (body as { detail?: unknown }).detail
+      code = (body as { code?: unknown }).code as string | undefined
+      if (typeof detail === 'string') {
+        message = detail
+      }
     }
   } catch {
     // 非 JSON 响应体直接展示原文
   }
-  return new ApiError(kind, message, response.status)
+  const kindOverride = code === 'DEEPSEEK_KEY_MISSING' ? 'keyMissing' : kind
+  return new ApiError(kindOverride, message, response.status, code)
 }
 
+/** 同源 /api 请求：自动带访问口令，401 时弹输入门 */
 export const request = async (url: string, init: RequestInit): Promise<Response> => {
+  const headers = new Headers(init?.headers)
+  const accessKey = getAccessKey()
+  if (accessKey) {
+    headers.set('x-access-key', accessKey)
+  }
   let response: Response
   try {
-    response = await fetch(url, init)
+    response = await fetch(url, { ...init, headers })
   } catch (error) {
     if (init.signal?.aborted) {
       throw error
     }
     throw new ApiError('network', error instanceof Error ? error.message : String(error))
+  }
+  if (response.status === 401) {
+    notifyUnauthorized()
   }
   if (!response.ok) {
     throw await readErrorResponse(response)
@@ -87,28 +107,16 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
   return response
 }
 
-const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string> => ({
-  // DeepSeek 兼容接口的鉴权方式，也可使用 Authorization: Bearer。
-  'x-api-key': apiKey,
-  // Files API 和通过 file_id 引用图片时必传；纯文本聊天无需携带。
-  ...(beta ? { 'anthropic-beta': FILES_BETA } : {}),
-})
-
-/** 用 GET /models 校验 API Key（不产生费用） */
-export const verifyApiKey = async (apiKey: string, signal?: AbortSignal): Promise<void> => {
-  await request(`${getApiOrigin()}/models`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    signal,
-  })
+/** 检查服务端模型 Key 是否可用（GET /models，不产生费用） */
+export const checkServerKey = async (signal?: AbortSignal): Promise<void> => {
+  await request(`${DEEPSEEK_PROXY}/models`, { method: 'GET', signal })
 }
 
 /**
- * POST /anthropic/v1/files 上传附件（不设过期时间，会话里的历史附件一直可用）。
+ * POST /api/deepseek/files 上传附件（不设过期时间，会话里的历史附件一直可用）。
  * purpose 为 null 时不传该字段（图片）；purpose 必须排在 file 之前。
  */
 export const uploadFile = async (
-  apiKey: string,
   file: File,
   purpose: FilePurpose | null,
   signal?: AbortSignal
@@ -118,9 +126,8 @@ export const uploadFile = async (
     form.append('purpose', purpose)
   }
   form.append('file', file)
-  const response = await request(`${anthropicBaseUrl()}/files`, {
+  const response = await request(`${DEEPSEEK_PROXY}/files`, {
     method: 'POST',
-    headers: anthropicHeaders(apiKey, true),
     body: form,
     signal,
   })
@@ -135,20 +142,19 @@ const hasFile = (body: CreateMessageRequest) =>
   )
 
 /**
- * POST /anthropic/v1/messages（stream: true），逐个产出流式事件，收到 message_stop 时结束。
- * ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
+ * POST /api/deepseek/messages（stream: true），逐个产出流式事件，收到 message_stop 时结束。
+ * 代理层逐块透传 SSE；ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
  */
 export async function* streamMessage(
-  apiKey: string,
   body: CreateMessageRequest,
   signal: AbortSignal
 ): AsyncGenerator<MessageStreamEvent> {
-  const response = await request(`${anthropicBaseUrl()}/messages`, {
+  const response = await request(`${DEEPSEEK_PROXY}/messages`, {
     method: 'POST',
     headers: {
-      ...anthropicHeaders(apiKey, hasFile(body)),
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+      ...(hasFile(body) ? { 'anthropic-beta': 'files-api-2025-04-14' } : {}),
     },
     body: JSON.stringify({ ...body, stream: true }),
     signal,

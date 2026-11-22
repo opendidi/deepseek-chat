@@ -76,7 +76,7 @@ For server deployment (systemd / nginx + HTTPS / Docker) see [DEPLOY.md](DEPLOY.
 
 ## Data and storage
 
-Your API key and settings are stored in the browser's localStorage. Conversations, original attachments, and favorites are stored in the local `data/chats.db` file (a single SQLite database written by the Python backend), with attachment blobs inside the same file. In Settings → Data you can turn off "Remember API Key on this device"; the key then stays in memory only and must be re-entered after a reload. The conversation id appears in the URL hash but contains no message content. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
+Settings are stored in the browser's localStorage. The API Key lives only in the server's `.env` (`DEEPSEEK_API_KEY`) and never reaches the browser. Conversations, original attachments, and favorites are stored in the local `data/chats.db` file (a single SQLite database written by the Python backend), with attachment blobs inside the same file. The conversation id appears in the URL hash but contains no message content. Chat, attachment uploads, and speech features go through the server's `/api/deepseek/*` proxy, which injects the Key.
 
 The storage backend only listens on `127.0.0.1`, so it is reachable from this machine only. Saves, deletions, and imports run inside SQLite transactions; a failed import never damages existing data. To back up, copy `data/chats.db` (stop the backend first); set the `DATA_DIR` environment variable to relocate it.
 

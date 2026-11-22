@@ -176,7 +176,6 @@ try {
   await call('Network.enable')
   await call('Page.addScriptToEvaluateOnNewDocument', {
     source: `
-      try { localStorage.setItem('deepseek-chat:api-key', 'sk-e2e-placeholder') } catch (e) {}
       window.__req = [];
       const usage = { input_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1 };
       const frame = (event) => 'event: ' + event.type + '\\ndata: ' + JSON.stringify(event) + '\\n\\n';
@@ -191,13 +190,13 @@ try {
       const original = window.fetch.bind(window);
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : (input && input.url) || '';
-        if (/\\/anthropic\\/v1\\/messages/.test(url)) {
+        if (/\\/api\\/deepseek\\/messages/.test(url)) {
           window.__req.push(JSON.parse((init && init.body) || '{}'));
           return Promise.resolve(new Response(events.map(frame).join(''), {
             status: 200, headers: { 'Content-Type': 'text/event-stream' },
           }));
         }
-        if (/\\/models(\\?|$)/.test(url)) {
+        if (/\\/api\\/deepseek\\/models(\\?|$)/.test(url)) {
           return Promise.resolve(new Response(JSON.stringify({ data: [
             { id: 'deepseek-flash' }, { id: 'deepseek-v4-pro' }, { id: 'custom-model' },
           ] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -435,7 +434,7 @@ try {
       await mcall('Page.enable')
       await mcall('Runtime.enable')
       await mcall('Page.addScriptToEvaluateOnNewDocument', {
-        source: `try { localStorage.setItem('deepseek-chat:api-key', 'sk-e2e-placeholder') } catch (e) {}`,
+        source: `// 模型 Key 已移至服务端 .env，前端不再注入`,
       })
       await mcall('Page.navigate', { url: BASE })
       let mobileReady = false

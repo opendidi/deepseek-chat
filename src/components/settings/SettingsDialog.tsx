@@ -22,7 +22,6 @@ import {
   importHistory,
 } from '../../services/chat/backup.js'
 import type { ClientTool, ToolCategory } from '../../services/agent/tools.js'
-import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, loadProvinces, type ProvinceOption } from '../../services/location.js'
 import {
@@ -38,7 +37,6 @@ import {
   setLocation,
   setMaxTokens,
   setPreventWithdraw,
-  setRememberApiKey,
   setSkipSafetyCheck,
   setStreamOutput,
   setSystemPrompt,
@@ -56,7 +54,6 @@ import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
-import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
 import { openPromptLibrary } from '../chatInput/promptLibraryState.js'
 import { UsageStatsCell } from './UsageStats.js'
@@ -100,11 +97,9 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
 
 const SettingsContent = () => {
   const t = useTranslate()
-  const isMobile = useIsMobile()
   // 打开时按调用方指定的分组选中，之后在弹窗内切换
   const [section, setSection] = useState(() => useSettingsDialog.getState().section)
-  // 切换分组不丢失正在输入的 API Key 与导入状态
-  const apiKeyEditor = useApiKeyEditor()
+  // 切换分组不丢失导入状态
   const historyImport = useHistoryImport()
   const historyDelete = useHistoryDelete()
   const replacingHistory = useChatStore((state) => state.importingHistory)
@@ -197,8 +192,6 @@ const SettingsContent = () => {
             </Suspense>
           ) : (
             <>
-              <ApiKeyField editor={apiKeyEditor} />
-              <RememberApiKeySetting />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <ExportEncrypted disabled={historyBusy} />
@@ -218,7 +211,6 @@ const SettingsContent = () => {
                   </Button>
                 }
               />
-              {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
             </>
           )}
         </div>
@@ -913,31 +905,6 @@ const ThemeSetting = () => {
         ))}
       </div>
     </div>
-  )
-}
-
-/** 关闭后 API Key 只在内存中，刷新页面即需重新输入。 */
-const RememberApiKeySetting = () => {
-  const t = useTranslate()
-  const remember = useSettings((state) => state.rememberApiKey)
-  return (
-    <SettingCell
-      label={t('apiKeyRemember')}
-      description={t('apiKeyRememberDesc')}
-      status={null}
-      action={
-        <button
-          type="button"
-          role="switch"
-          aria-checked={remember}
-          aria-label={t('apiKeyRemember')}
-          className={clsx(styles.switch, remember && styles.switchOn)}
-          onClick={() => setRememberApiKey(!remember)}
-        >
-          <span className={styles.switchThumb} />
-        </button>
-      }
-    />
   )
 }
 
