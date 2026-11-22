@@ -3,6 +3,19 @@
 deepseek-chat 的完整部署手册：本地开发、服务器、Docker、ARM 开发板（树莓派 / Jetson），
 以及实际踩过的坑（见文末 FAQ）。
 
+## 目录
+
+- [0. 架构与服务形态](#0-先了解架构决定了部署方式)
+- [1. 本地开发（前后端分离）](#1-本地开发前后端分离)
+- [2. 生产形态一：单端口直跑](#2-生产形态一单端口直跑最简单)
+- [3. 生产形态二：systemd 常驻](#3-生产形态二systemd-常驻开机自启)
+- [4. 生产形态三：nginx 反向代理](#4-生产形态三nginx-反向代理)
+- [5. Docker](#5-docker)
+- [6. 开发板（ARM Linux 单板机）](#6-开发板arm-linux-单板机)
+- [7. 数据与运维](#7-数据与运维)
+- [8. 踩坑 FAQ](#8-踩坑-faq均为实际出现过的错误)
+- [9. 部署后验证清单](#9-部署后验证清单)
+
 ---
 
 ## 0. 先了解：架构决定了部署方式
@@ -16,6 +29,21 @@ deepseek-chat 的完整部署手册：本地开发、服务器、Docker、ARM �
   前端会弹输入门）或 nginx Basic Auth，否则任何人都能读写、删除全部会话。
 - 部署产物：`dist/`（前端）+ `server/`（后端代码）+ `requirements.txt`（锁定版本依赖）+
   一个 SQLite 文件。
+
+### 运行拓扑
+
+```text
+浏览器（局域网设备 / 公网）
+  │  各自填 DeepSeek API Key，请求由浏览器直发 api.deepseek.com
+  ▼
+nginx :80（可选：gzip / HTTPS / Basic Auth / SSE 关缓冲）
+  ▼
+uvicorn :8000（127.0.0.1，systemd 常驻）
+  ├── 托管 dist/ 静态产物（带 hash 资源下发一年 immutable 缓存）
+  ├── /api/* 存储接口（GZip 压缩）
+  ▼
+SQLite data/chats.db（WAL 模式，含附件原件）
+```
 
 ### 服务形态速查
 
@@ -104,8 +132,24 @@ WantedBy=multi-user.target
 
 ```sh
 sudo systemctl daemon-reload
-sudo systemctl enable --now deepseek-chat
+sudo systemctl enable deepseek-chat     # 开机自启动
+sudo systemctl start deepseek-chat      # 启动；与终端窗口解耦，关窗口照常运行
 ```
+
+常用管理命令：
+
+```sh
+systemctl status deepseek-chat      # 状态
+systemctl restart deepseek-chat     # 重启（改代码/配置后）
+systemctl stop deepseek-chat        # 停止
+systemctl is-enabled deepseek-chat  # 确认自启动（应输出 enabled）
+journalctl -u deepseek-chat -f      # 实时日志
+journalctl -u deepseek-chat -n 50   # 最近 50 行
+```
+
+⚠️ 启动失败先查端口占用：之前在终端里手动跑的 uvicorn 会占住 8000（报
+`address already in use`），先 Ctrl+C 或 `sudo pkill -f "uvicorn server.app"` 再 start。
+不要用 nohup / tmux / cron 兜底：它们没有崩溃拉起、开机自启与日志收集，关机就丢。
 
 要点：`--host 127.0.0.1` 只监听本机，对外统一走 nginx（见下节）；路径按实际项目位置改。
 
@@ -418,3 +462,28 @@ PYTHONPATH 里的旧版依赖（为别的解释器版本编译）遮蔽了 venv 
 **Q8：板子重启后服务没起来？**
 项目在 U 盘上但 unit 没等挂载：加 `RequiresMountsFor=/mnt/usb/deepseek`；
 U 盘挂载点变化的话在 /etc/fstab 固定。
+
+**Q9：`systemctl start` 报 `address already in use`？**
+之前在终端里手动跑的 uvicorn 还占着 8000。Ctrl+C 停掉它，或
+`sudo pkill -f "uvicorn server.app"`，再 `systemctl start`。
+之后统一用 systemd 管理，别再开第二个实例。
+
+---
+
+## 9. 部署后验证清单
+
+任意形态部署完成后逐条过一遍：
+
+```sh
+curl -I http://<地址>/api/health          # 200 + {"ok":true,...}
+curl -I http://<地址>/                    # 200，内容是 index.html（前端页面）
+curl -I http://<地址>/static/$(ls dist/static/js | head -1 | sed 's|^|js/|')
+                                          # 200 + Cache-Control（immutable 或 30d）
+```
+
+浏览器侧：
+
+- 打开首页能正常聊天，回复**逐字流式**出现（SSE 未被缓冲）；
+- 刷新页面会话恢复；上传图片附件成功且重载后仍在；
+- 配置了 `ACCESS_PASSWORD` 时，首次访问弹出口令输入门；
+- nginx + HTTPS 形态下，浏览器地址栏可安装 PWA（安全上下文才生效）。
