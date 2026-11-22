@@ -196,6 +196,65 @@ uv venv --python 3.11 --seed .venv      # --seed 装入 pip，依赖安装与系
 - 服务只做存储代理，不碰 CUDA / JetPack 机器学习组件；浏览器直发 DeepSeek 请求，板上无需任何 Key。
 - 其余（SD 卡磨损、DATA_DIR、访问口令）同下方通用注意事项。
 
+### 板子上 systemd + nginx 组合（/mnt/usb 布局可直接粘贴）
+
+```ini
+# /etc/systemd/system/deepseek-chat.service
+[Unit]
+Description=deepseek-chat storage backend
+After=network.target local-fs.target
+# 项目在 U 盘/移动盘上时必须等挂载就绪，否则开机自启会因目录不存在而失败
+RequiresMountsFor=/mnt/usb/deepseek
+
+[Service]
+WorkingDirectory=/mnt/usb/deepseek
+# uv 创建的解释器也在 .venv 里；--host 只监听本机，对外统一走 nginx
+ExecStart=/mnt/usb/deepseek/.venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+User=xiaodi
+Environment=DATA_DIR=/mnt/usb/deepseek/data
+# 公网/多人访问建议开访问口令；.env 也可提供
+# Environment=ACCESS_PASSWORD=change-me
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```nginx
+# /etc/nginx/sites-available/deepseek-chat
+server {
+    listen 80 default_server;
+    server_name _;
+
+    # 导入 / 附件上传的上限
+    client_max_body_size 100m;
+
+    gzip on;
+    gzip_proxied any;
+    gzip_types application/json application/javascript text/css;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_http_version 1.1;
+        # 聊天回复是 SSE 流式，缓冲会把打字机效果卡成一坨
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now deepseek-chat
+sudo ln -sf /etc/nginx/sites-available/deepseek-chat /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl restart nginx
+# 局域网验证：浏览器打开 http://板子IP/ 与 http://板子IP/api/health
+```
+
 ### 板子特有的注意事项
 
 - **Python ≥ 3.11**：Bookworm 系统自带 3.11 可直接用；Bullseye 及更旧的系统需要先升级 Python。
