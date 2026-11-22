@@ -1,7 +1,8 @@
 """启动存储后端（纯 API 服务）：python starter.py
 
 自动完成两件事：
-1. 虚拟环境自举：.venv 不存在时创建并安装 requirements.txt（仅首次，全局 python 即可运行本脚本）；
+1. 虚拟环境自举：.venv 不存在时用系统里 ≥3.11 的解释器创建（都没有则调用 uv 准备
+   独立解释器，适配 Jetson / 老系统镜像），并安装 requirements.txt（仅首次）；
 2. 启动后端 API（/api/*，不托管前端页面），就绪后日志给出前端地址。
 
 前端服务独立运行：
@@ -13,12 +14,16 @@
     python starter.py                     # 默认 http://127.0.0.1:8000
     python starter.py --port 8010         # 换端口
 数据保存在 data/chats.db（可用 DATA_DIR 环境变量改位置）。
+
+注意：本脚本自身需要 ≥3.7 的解释器来运行（Jetson JetPack 4.x 的系统 python3 是 3.6，
+跑不了它——按 DEPLOY.md 方式五先用 uv 手动创建 .venv，再用 .venv 里的解释器运行）。
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -27,10 +32,64 @@ ROOT = Path(__file__).resolve().parent
 VENV_DIR = ROOT / '.venv'
 IS_WINDOWS = os.name == 'nt'
 VENV_PYTHON = VENV_DIR / ('Scripts' if IS_WINDOWS else 'bin') / ('python.exe' if IS_WINDOWS else 'python')
+MIN_PYTHON = (3, 11)
 
 
 def log(message: str) -> None:
     print(f'[starter] {message}', flush=True)
+
+
+def _python_version(interpreter: str) -> tuple[int, int] | None:
+    """读取解释器的 (major, minor) 版本；不可执行或输出异常时返回 None"""
+    try:
+        out = subprocess.run(
+            [interpreter, '-c', 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")'],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    major, _, minor = out.stdout.strip().partition('.')
+    try:
+        return (int(major), int(minor))
+    except ValueError:
+        return None
+
+
+def _find_python() -> str | None:
+    """在 PATH 上按候选顺序找 ≥3.11 的解释器。
+
+    老系统镜像（Jetson JetPack 4.x 是 3.6、Debian Bullseye 是 3.9）的 python3 会被
+    版本门槛过滤掉；Windows 商店占位 stub 输出为空同样返回 None。
+    """
+    for name in ('python3.13', 'python3.12', 'python3.11', 'python3'):
+        path = shutil.which(name)
+        if not path:
+            continue
+        version = _python_version(path)
+        if version and version >= MIN_PYTHON:
+            return path
+    return None
+
+
+def _create_venv() -> None:
+    """创建 .venv：优先系统 ≥3.11 解释器；都没有则用 uv 准备独立解释器（自带 ssl）。"""
+    interpreter = _find_python()
+    if interpreter:
+        log(f'首次运行：用 {interpreter} 创建虚拟环境 .venv ...')
+        subprocess.run([interpreter, '-m', 'venv', str(VENV_DIR)], check=True)
+        return
+    uv = shutil.which('uv')
+    if uv:
+        log('未找到 Python ≥3.11，用 uv 准备独立解释器 3.11（首次需联网，自带 ssl，老镜像适用）...')
+        # --seed 装入 pip：后续依赖安装走 venv 内的 pip，与系统 python 无关
+        subprocess.run([uv, 'venv', '--python', '3.11', '--seed', str(VENV_DIR)], cwd=ROOT, check=True)
+        return
+    log('未找到 Python ≥3.11，也没有 uv。任选其一后重跑本脚本：')
+    log('  1) 安装 Python 3.11+（apt / 官网）；')
+    log('  2) 安装 uv：curl -LsSf https://astral.sh/uv/install.sh | sh（离线板子见 DEPLOY.md 轮子方案）。')
+    sys.exit(1)
 
 
 def ensure_venv() -> Path:
@@ -41,8 +100,7 @@ def ensure_venv() -> Path:
     """
     fresh = not VENV_PYTHON.exists()
     if fresh:
-        log('首次运行：创建虚拟环境 .venv ...')
-        venv.create(VENV_DIR, with_pip=True)
+        _create_venv()
     check = subprocess.run(
         [str(VENV_PYTHON), '-c', 'import fastapi, uvicorn, multipart'],
         capture_output=True,

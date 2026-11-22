@@ -168,6 +168,34 @@ python3 -m venv .venv
 板上 Python 若低于 3.11（旧版 Bullseye 系统是 3.9），先装 3.11+（`apt` 源没有就用
 `uv venv --python 3.11` 或 pyenv），`ExecStart` 指向对应解释器。
 
+### Jetson Nano（2GB）专属步骤
+
+JetPack 4.x 系统是 Ubuntu 18.04，自带 **Python 3.6** 且常见缺 ssl 模块——代码需要的
+`X | None` 等 3.11 语法跑不了，pip 也无法联网装包。用 uv 绕开系统 Python：
+
+```sh
+# 1) 电脑上：pnpm install && pnpm build，然后按上面第 2 步 scp 上传
+
+# 2) 板子上装 uv（纯 shell 下载，不依赖系统 Python）并创建独立 3.11 环境
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+cd ~/deepseek-chat
+uv venv --python 3.11 --seed .venv      # --seed 装入 pip，依赖安装与系统 3.6 无关
+.venv/bin/pip install -r requirements.txt
+
+# 3) 启动（Jetson 的 python3 是 3.6，starter.py 必须用 .venv 里的解释器运行）
+.venv/bin/python starter.py             # 纯 API（:8000）
+.venv/bin/python -m uvicorn server.app:app --host 0.0.0.0 --port 8000   # 或直接 uvicorn
+```
+
+2GB 内存与运行注意：
+
+- 依赖全部是预编译 aarch64 wheel（requirements.txt 已逐个锁版本），**不会触发大内存编译**；
+  uvicorn 保持单进程，不要加 `--workers`。
+- JetPack 默认启用 zram swap，安装/运行靠它兜底即可，无需手动加 swap。
+- 服务只做存储代理，不碰 CUDA / JetPack 机器学习组件；浏览器直发 DeepSeek 请求，板上无需任何 Key。
+- 其余（SD 卡磨损、DATA_DIR、访问口令）同下方通用注意事项。
+
 ### 板子特有的注意事项
 
 - **Python ≥ 3.11**：Bookworm 系统自带 3.11 可直接用；Bullseye 及更旧的系统需要先升级 Python。
