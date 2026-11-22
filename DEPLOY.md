@@ -356,6 +356,11 @@ uv venv --python 3.11 --seed .venv      # --seed 装入 pip，依赖安装与系
 
 ### 6.3 板子上 systemd + nginx 组合（U 盘布局可直接粘贴）
 
+> 一键脚本：`sudo bash scripts/setup-board.sh`（等价于本节全部手工步骤，幂等可重跑；
+> 可用 `PROJECT_DIR=` `SERVICE_USER=` `BACKEND_PORT=` 环境变量覆盖默认值）。
+> 以下为手工步骤，便于理解各配置的作用。
+
+
 ```ini
 # /etc/systemd/system/deepseek-chat.service
 [Unit]
