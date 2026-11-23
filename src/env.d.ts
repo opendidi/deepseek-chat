@@ -12,9 +12,6 @@ declare module '*.module.css' {
 
 declare module '*.css' {}
 
-/** 公开 API 的地址，见 rspack.config.ts 的 createConfig */
-declare const __API_ORIGIN__: string
-
 /** 是否注册 Service Worker（仅生产构建为 true） */
 declare const __ENABLE_SW__: boolean
 

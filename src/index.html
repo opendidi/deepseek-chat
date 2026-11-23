@@ -8,9 +8,8 @@
     静态站没有响应头，用 meta 下发 CSP 作为 XSS 的第二层防线：
     - script-src 只允许同源脚本，阻止注入的内联脚本与 javascript: 执行；
     - style-src 放行 inline 是因为 KaTeX / Mermaid 生成的 HTML 带 style 属性；
-    - connect-src 允许任意 https 与本地回环地址，兼容 createConfig({ apiOrigin }) 与
-      运行时在设置里自定义的接口地址（本地网关常见 http://localhost）；Chrome 不接受
-      CSP 源里的 IPv6 字面量（[::1]），IPv6 本地服务请用 localhost 访问；
+    - connect-src 允许任意 https 与本地回环地址，兼容本地网关与开发代理（常见 http://localhost）；
+      Chrome 不接受 CSP 源里的 IPv6 字面量（[::1]），IPv6 本地服务请用 localhost 访问；
     - img-src 放行 https 用于搜索结果站点图标，blob:/data: 用于本地附件与图表。
   -->
     <meta

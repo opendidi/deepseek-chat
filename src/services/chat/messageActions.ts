@@ -197,12 +197,13 @@ export const continueReply = (sessionId: string, messageId: string) => {
   ) {
     return
   }
-  const { thinking, search, chatModel } = useSettings.getState()
+  const { thinking, reasoningEffort, search, chatModel } = useSettings.getState()
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用当前默认模型和开关。
     model: previous.model ?? chatModel,
     thinking: previous.thinking ?? thinking,
+    reasoningEffort: previous.reasoningEffort ?? reasoningEffort,
     search: previous.search ?? search,
     status: 'pending',
     stopReason: undefined,

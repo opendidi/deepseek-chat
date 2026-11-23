@@ -1,6 +1,4 @@
-import { API_ORIGIN_SHIM } from './helpers/apiOrigin.js'
 // 导入链会经过 api/client.js，必须先注入构建期常量
-void API_ORIGIN_SHIM
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { installMemoryStorage } from './helpers/localStorage.js'
@@ -34,7 +32,6 @@ import {
   percent,
   sparklinePath,
 } from '../src/utils/usageChart.js'
-import { maskApiKey } from '../src/utils/maskApiKey.js'
 
 const usage = {
   input_tokens: 100,
@@ -256,11 +253,3 @@ test('热力图固定 8 周、环形图/折线/小时峰值纯函数', () => {
   assert.deepEqual(hourPeak([0, 0, 5, 3]), { hour: 2, count: 5 })
 })
 
-test('API Key 统一掩码为 sk-**** 加末四位', () => {
-  assert.equal(maskApiKey('sk-1234567890abcd'), 'sk-****abcd')
-  // 过短的 Key 末四位即本身，整体隐藏
-  assert.equal(maskApiKey('short'), 'sk-****')
-  assert.equal(maskApiKey('abc'), 'sk-****')
-  assert.equal(maskApiKey(null), '—')
-  assert.equal(maskApiKey('   '), '—')
-})

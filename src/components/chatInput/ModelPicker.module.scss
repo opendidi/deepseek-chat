@@ -38,8 +38,14 @@ $font-tag: 9px;
   }
 }
 
+.triggerEffort {
+  margin-left: 2px;
+  color: var(--dsw-alias-brand-text);
+  font-weight: 600;
+}
+
 .triggerLabel {
-  max-width: 180px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -61,6 +67,15 @@ $font-tag: 9px;
 }
 
 .panel {
+  // 滑块 thumb 中心位置：10px + (轨道宽 - 20px) * index/3。
+  // 填充终点与刻度点共用这几个值，保证三者完全对齐。
+  --effort-thumb: 26px;
+  --effort-track: 18px;
+  --effort-pos-0: calc(var(--effort-thumb) / 2);
+  --effort-pos-1: calc(var(--effort-thumb) / 2 + (100% - var(--effort-thumb)) / 3);
+  --effort-pos-2: calc(var(--effort-thumb) / 2 + (100% - var(--effort-thumb)) * 2 / 3);
+  --effort-pos-3: calc(100% - var(--effort-thumb) / 2);
+
   position: fixed;
   z-index: 900;
   box-sizing: border-box;
@@ -76,12 +91,48 @@ $font-tag: 9px;
     0 8px 26px rgba(0, 0, 0, 0.12);
 }
 
+.panelCompact {
+  width: 300px;
+  padding: 12px 14px;
+}
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.titleGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -2px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    transform: rotate(180deg);
+  }
+
+  &:hover {
+    color: var(--dsw-alias-brand-text);
+  }
 }
 
 .title {
@@ -232,6 +283,181 @@ $font-tag: 9px;
   color: var(--dsw-alias-state-error-primary);
   font-size: $font-tag;
   line-height: 16px;
+}
+
+.compactView {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.compactModelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0 10px;
+  border: none;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.compactLabel {
+  color: var(--dsw-alias-label-primary);
+  font-size: $font-name;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.compactModelName,
+.compactEffortName {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.compactEffort {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+.compactEffortHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.compactEffortName {
+  color: var(--dsw-alias-brand-text);
+  font-weight: 600;
+}
+
+.compactEffortNameWarn {
+  color: var(--effort-fill-end, var(--dsw-alias-brand-text));
+  font-weight: 600;
+}
+
+.effortMax.compactEffort {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 四档配色：关闭=灰、低=蓝、高=蓝紫、极高=紫；--effort-dot 是刻度点颜色 */
+.effortOff {
+  --effort-fill: #c9ccd3;
+  --effort-fill-end: #d9dbe1;
+  --effort-dot: rgba(0, 0, 0, 0.22);
+  --effort-progress: var(--effort-pos-0);
+}
+
+.effortLow {
+  --effort-fill: #5b8cff;
+  --effort-fill-end: #7ba4ff;
+  --effort-dot: rgba(255, 255, 255, 0.75);
+  --effort-progress: var(--effort-pos-1);
+}
+
+.effortHigh {
+  --effort-fill: #5b7cff;
+  --effort-fill-end: #a06bff;
+  --effort-dot: rgba(255, 255, 255, 0.85);
+  --effort-progress: var(--effort-pos-2);
+}
+
+.effortMax {
+  --effort-fill: #7c5cff;
+  --effort-fill-end: #c165ff;
+  --effort-dot: rgba(255, 255, 255, 0.9);
+  --effort-progress: var(--effort-pos-3);
+}
+
+.effortSlider {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+
+  &::-webkit-slider-runnable-track {
+    height: var(--effort-track);
+    border-radius: 9px;
+    /* 4 个刻度点精确对齐 thumb 中心：13px + (100% - 26px) * i/3。
+       当前档的 thumb 会盖住对应点，视觉上只剩 3 个点，符合预期。 */
+    background:
+      radial-gradient(circle at var(--effort-pos-0) 50%, var(--effort-dot) 1.5px, transparent 2px),
+      radial-gradient(circle at var(--effort-pos-1) 50%, var(--effort-dot) 1.5px, transparent 2px),
+      radial-gradient(circle at var(--effort-pos-2) 50%, var(--effort-dot) 1.5px, transparent 2px),
+      radial-gradient(circle at var(--effort-pos-3) 50%, var(--effort-dot) 1.5px, transparent 2px),
+      linear-gradient(
+        to right,
+        var(--effort-fill, var(--dsw-alias-brand-primary)) 0%,
+        var(--effort-fill-end, var(--dsw-alias-brand-primary)) var(--effort-progress, 100%),
+        var(--dsw-alias-interactive-bg-hover) var(--effort-progress, 100%),
+        var(--dsw-alias-interactive-bg-hover) 100%
+      );
+  }
+
+  &::-webkit-slider-thumb {
+    width: var(--effort-thumb);
+    height: var(--effort-thumb);
+    margin-top: calc((var(--effort-track) - var(--effort-thumb)) / 2);
+    appearance: none;
+    border: none;
+    border-radius: 50%;
+    background-color: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  }
+
+  &::-moz-range-track {
+    height: var(--effort-track);
+    border-radius: 9px;
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &::-moz-range-progress {
+    height: var(--effort-track);
+    border-radius: 9px;
+    background: linear-gradient(to right, var(--effort-fill), var(--effort-fill-end));
+  }
+
+  &::-moz-range-thumb {
+    width: var(--effort-thumb);
+    height: var(--effort-thumb);
+    border: none;
+    border-radius: 50%;
+    background-color: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 }
 
 .footer {

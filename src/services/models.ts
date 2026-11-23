@@ -1,4 +1,4 @@
-import { request } from './api/client.js'
+import { DEEPSEEK_MODELS_URL, request } from './api/client.js'
 import type { ChatModel } from './api/types.js'
 import { parseModelIds } from '../utils/modelId.js'
 
@@ -39,7 +39,7 @@ export const modelDisplayName = (id: ChatModel): string =>
 
 /** GET /models：拉取服务端可用模型；与内置 id 相同的会补上本地定价 */
 export const fetchCloudModels = async (signal?: AbortSignal): Promise<ModelInfo[]> => {
-  const response = await request('/api/deepseek/models', {
+  const response = await request(DEEPSEEK_MODELS_URL, {
     method: 'GET',
     signal,
   })

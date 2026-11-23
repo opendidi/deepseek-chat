@@ -14,7 +14,9 @@ import type {
  * 模型 API 地址：一律走本机 FastAPI 的 /api/deepseek 代理，Key 只存在于服务端 .env。
  * 开发模式由 devServer 代理 /api 到 127.0.0.1:8000，生产模式与后端同源。
  */
-const DEEPSEEK_PROXY = '/api/deepseek'
+export const DEEPSEEK_PROXY = '/api/deepseek'
+export const DEEPSEEK_TOOLS_PROXY = `${DEEPSEEK_PROXY}/tools`
+export const DEEPSEEK_MODELS_URL = `${DEEPSEEK_PROXY}/models`
 
 export type ApiErrorKind =
   /** 非 2xx 响应 */
@@ -53,6 +55,18 @@ const isErrorBody = (value: unknown): value is ApiErrorBody & { code?: string } 
   value !== null &&
   'error' in value &&
   typeof (value as ApiErrorBody).error?.message === 'string'
+
+/** 代理的 SSE error 帧形如 {"error":{"message":"…"},"status":402,"code":"UPSTREAM_ERROR"} */
+const sseErrorToApiError = (payload: unknown, raw: string): ApiError => {
+  if (!isErrorBody(payload)) {
+    return new ApiError('stream', raw)
+  }
+  const frame = payload as ApiErrorBody & { status?: unknown; code?: unknown }
+  const code = typeof frame.code === 'string' ? frame.code : undefined
+  const status = typeof frame.status === 'number' ? frame.status : undefined
+  const kind = code === 'DEEPSEEK_KEY_MISSING' ? 'keyMissing' : 'stream'
+  return new ApiError(kind, frame.error.message, status, code)
+}
 
 const readErrorResponse = async (
   response: Response,
@@ -98,18 +112,15 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
     }
     throw new ApiError('network', error instanceof Error ? error.message : String(error))
   }
-  if (response.status === 401) {
+  if (response.status === 401 && !response.headers.has('x-proxy-error')) {
+    // 只有本机访问口令失效才弹输入门；上游模型 Key 失效由代理透传，
+    // 带 x-proxy-error 头，应由错误文案提示部署方更新 Key，而不是让用户输口令。
     notifyUnauthorized()
   }
   if (!response.ok) {
     throw await readErrorResponse(response)
   }
   return response
-}
-
-/** 检查服务端模型 Key 是否可用（GET /models，不产生费用） */
-export const checkServerKey = async (signal?: AbortSignal): Promise<void> => {
-  await request(`${DEEPSEEK_PROXY}/models`, { method: 'GET', signal })
 }
 
 /**
@@ -172,8 +183,10 @@ export async function* streamMessage(
         continue
       }
     }
+    // 代理把上游 4xx/5xx 与网络异常编码成带 status/code 的 error 帧，
+    // 必须还原状态码，否则余额不足/限流会被 describeReply 当成通用错误。
     if (isErrorBody(payload)) {
-      throw new ApiError('stream', payload.error.message)
+      throw sseErrorToApiError(payload, data)
     }
     if (eventName === 'error') {
       throw new ApiError('stream', data)

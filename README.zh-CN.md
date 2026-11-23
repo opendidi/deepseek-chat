@@ -72,7 +72,7 @@ pnpm dev                      # 终端 2：前端开发服务器（http://localh
 
 设置保存在浏览器 localStorage；API Key 只存服务端 `.env`，浏览器不持有。会话、附件原件与收藏保存在本机 `data/chats.db`（SQLite 单文件，由 Python 后端读写），附件原件存在同一文件的 BLOB 列里。会话 id 会出现在地址栏 hash 中，但不包含任何对话内容。发送消息、上传附件、使用语音功能时，请求经服务端 `/api/deepseek/*` 代理转发，Key 只由服务端注入。
 
-存储后端只监听 `127.0.0.1`，仅本机可访问；保存、删除与导入都在 SQLite 事务内完成，导入失败不会破坏现有数据。备份只需复制 `data/chats.db`（建议先停止后端再复制）。
+存储后端在本地开发时监听 `127.0.0.1`，但生产单端口形态（`scripts/setup-board.sh`）会绑定 `0.0.0.0` 供局域网访问——务必在 `.env` 设置 `ACCESS_PASSWORD` 或前置鉴权代理。保存、删除与导入都在 SQLite 事务内完成，导入失败不会破坏现有数据。备份需复制 `data/chats.db` 和 `.env`（建议先停止后端再复制）。
 
 导入会在确认并校验成功后替换全部本地会话与附件；导出包含会话与本地可用的图片原件，不包含设置或非图片附件原件。格式与保留范围见[历史导入导出](src/services/chat/history/README.md)。加密导出用口令派生密钥（PBKDF2 + AES-256-GCM）把 ZIP 包成加密容器，导入时输入导出口令即可解密。
 
@@ -97,9 +97,14 @@ pnpm dev                      # 终端 2：前端开发服务器（http://localh
 | `pnpm scss:types:check` | 校验样式类型声明是否同步（CI 使用） |
 | `pnpm test:e2e` | 生产构建 + 真实后端上的浏览器冒烟测试（需本机 Chrome） |
 
+> lint 说明：`.oxlintrc.json` 关闭了 `react/refs`、`react/set-state-in-effect` 与
+> `react/purity` 三条规则——它们是 React Compiler 的优化约束，本项目用 SWC 构建且未启用
+> Compiler；其中"渲染期写 ref 供 useMemo 读取最新值"是有意设计，改成 effect 同步反而会读到旧值。
+
+
 样式全部使用 SCSS：组件样式为 `*.module.scss`（CSS Modules），全局样式为 `*.scss`。所有组件样式都有配套 `*.module.scss.d.ts`（手写或由 `pnpm scss:types` 生成），因此类名拼写错误会在类型检查阶段暴露。rspack 先用 `sass-loader` 编译，再交给 `builtin:lightningcss-loader` 按目标浏览器降级；第三方 CSS（如 KaTeX）仍走原有的 `.css` 规则。
 
-[rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`。`createConfig({ apiOrigin, devServer })` 支持自定义 API 地址和开发服务器代理；也可以在「设置 → 通用设置 → API 地址」里运行时覆盖。
+模型请求一律走同源 `/api/deepseek/*` 代理，上游地址由服务端 `.env` 的 `DEEPSEEK_BASE_URL` 决定（默认 `https://api.deepseek.com`）。[rspack.config.ts](rspack.config.ts) 的 `createConfig({ devServer })` 只负责开发服务器代理。
 
 聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；语音使用 ASR / TTS 接口。请求包含搜索、链接阅读、标题、`latest_reminder` 等扩展，开启 Agent 时还会声明客户端工具；接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
 

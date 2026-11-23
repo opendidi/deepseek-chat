@@ -1,6 +1,7 @@
 /** 由 scripts/generate-scss-types.mjs 生成；样式类名变化后重新运行 pnpm scss:types */
 declare const styles: {
   readonly anchor: string
+  readonly back: string
   readonly card: string
   readonly cardId: string
   readonly cardMain: string
@@ -10,6 +11,19 @@ declare const styles: {
   readonly cardTitleRow: string
   readonly check: string
   readonly chevron: string
+  readonly compactEffort: string
+  readonly compactEffortHead: string
+  readonly compactEffortName: string
+  readonly compactEffortNameWarn: string
+  readonly compactLabel: string
+  readonly compactModelName: string
+  readonly compactModelRow: string
+  readonly compactView: string
+  readonly effortHigh: string
+  readonly effortLow: string
+  readonly effortMax: string
+  readonly effortOff: string
+  readonly effortSlider: string
   readonly error: string
   readonly fetch: string
   readonly footer: string
@@ -17,13 +31,16 @@ declare const styles: {
   readonly list: string
   readonly note: string
   readonly panel: string
+  readonly panelCompact: string
   readonly refreshIcon: string
   readonly sourceLink: string
   readonly sourceRow: string
   readonly spinning: string
   readonly tag: string
   readonly title: string
+  readonly titleGroup: string
   readonly trigger: string
+  readonly triggerEffort: string
   readonly triggerIcon: string
   readonly triggerLabel: string
   readonly triggerOpen: string

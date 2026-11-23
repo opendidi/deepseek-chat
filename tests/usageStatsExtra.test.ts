@@ -1,6 +1,4 @@
-import { API_ORIGIN_SHIM } from './helpers/apiOrigin.js'
 // usageLedger 经 usagePricing → models → api/client，导入前需注入构建期常量
-void API_ORIGIN_SHIM
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { formatDate } from '../src/utils/format.js'

@@ -62,13 +62,14 @@ export const bindHashSync = (): (() => void) => {
 
 /** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
 export const createReply = (): AssistantMessage => {
-  const { thinking, search, chatModel } = useSettings.getState()
+  const { thinking, reasoningEffort, search, chatModel } = useSettings.getState()
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
     model: chatModel,
     thinking,
+    reasoningEffort,
     search,
     prefix: true,
     status: 'pending',

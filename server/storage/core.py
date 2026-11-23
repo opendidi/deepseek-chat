@@ -95,6 +95,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
 """
 
 
+# 当前 schema 版本：新增表/列时 +1，并在 _migrate 里写幂等 ALTER。
+# 历史库没有 user_version（默认 0），首次启动时直接置为当前版本。
+SCHEMA_VERSION = 1
+
+
 def configure(data_dir: Path) -> None:
     """设置数据目录并确保 schema 存在；应用启动与测试前调用"""
     global _db_path
@@ -104,8 +109,22 @@ def configure(data_dir: Path) -> None:
     try:
         with conn:
             conn.executescript(SCHEMA)
+            _migrate(conn)
     finally:
         conn.close()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """按 user_version 做幂等迁移；目前只有 v1（初始 schema），留入口供后续加列。"""
+    current = conn.execute('PRAGMA user_version').fetchone()[0]
+    if current >= SCHEMA_VERSION:
+        return
+    # 示例（未来加列时取消注释，保持幂等）：
+    # if current < 2:
+    #     columns = {row[1] for row in conn.execute('PRAGMA table_info(sessions)')}
+    #     if 'new_col' not in columns:
+    #         conn.execute('ALTER TABLE sessions ADD COLUMN new_col TEXT NOT NULL DEFAULT ""')
+    conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
 
 
 def connect() -> sqlite3.Connection:

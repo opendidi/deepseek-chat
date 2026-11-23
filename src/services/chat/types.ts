@@ -97,6 +97,8 @@ export type AssistantMessage = MessageBranch & {
   model: ChatModel | null
   /** 请求时是否开启深度思考 */
   thinking?: boolean
+  /** 请求时的推理强度，续写沿用；无值表示旧消息，回退当前设置 */
+  reasoningEffort?: 'low' | 'high' | 'max'
   /** 请求时是否声明 deepseek_web_search；关闭时仍声明 deepseek_read_url */
   search?: boolean
   /** 本轮请求的系统信息快照；各回答版本独立保存，续写沿用。历史消息中缺省的快照保持为空。 */
@@ -121,6 +123,8 @@ export type AssistantMessage = MessageBranch & {
     kind: ApiErrorKind | 'upload'
     message: string
     status?: number
+    /** 服务端错误码：有值表示上游透传（如模型 Key 失效）；无值的 401 是本机访问口令失效 */
+    code?: string
     localMessage?: TranslationMessage
     /** 仅 upload：重新上传是否可能成功（网络、限流、服务端繁忙）；过大、格式不支持为 false */
     retryable?: boolean

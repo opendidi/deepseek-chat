@@ -27,7 +27,6 @@ import { regionCodes, getRegionName, loadProvinces, type ProvinceOption } from '
 import {
   isChineseBrowser,
   setAmapToolOptOut,
-  setApiOrigin,
   setAgentTools,
   setAutoCompress,
   setChatMode,
@@ -173,7 +172,6 @@ const SettingsContent = () => {
               <TtsVoiceSetting />
               <LocationSetting />
               <SystemPromptSetting />
-              <ApiOriginSetting />
               <PromptLibrarySetting />
             </>
           ) : section === 'model' ? (
@@ -741,50 +739,6 @@ const MaxTokensSetting = () => {
       min={1}
       max={Number.POSITIVE_INFINITY}
       integer
-    />
-  )
-}
-
-/** 自定义 API 服务地址；留空使用构建期默认地址 */
-const ApiOriginSetting = () => {
-  const t = useTranslate()
-  const apiOrigin = useSettings((state) => state.apiOrigin)
-  const [text, setText] = useState(apiOrigin ?? '')
-  const [error, setError] = useState(false)
-  const commit = () => {
-    const trimmed = text.trim()
-    if (trimmed && !/^https?:\/\/.+/i.test(trimmed)) {
-      setError(true)
-      return
-    }
-    setApiOrigin(text)
-    setError(false)
-  }
-  return (
-    <SettingCell
-      label={t('settingsApiOrigin')}
-      description={t('settingsApiOriginDesc')}
-      status={error ? { key: 'settingsApiOriginInvalid', error: true } : null}
-      action={
-        <input
-          className={clsx(styles.textInput, styles.originInput)}
-          aria-label={t('settingsApiOrigin')}
-          type="url"
-          spellCheck={false}
-          placeholder="https://api.deepseek.com"
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value)
-            setError(false)
-          }}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commit()
-            }
-          }}
-        />
-      }
     />
   )
 }

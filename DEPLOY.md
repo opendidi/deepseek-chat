@@ -98,7 +98,8 @@ python -m venv .venv
 ```
 
 本地构建、服务器不装 Node 的做法：本地 `pnpm build` 后把 `dist/`、`server/`、
-`requirements.txt`、`starter.py` 上传到服务器同一目录，跳过第 1 步。
+`requirements.txt`、`starter.py` 以及**配置好的 `.env`** 上传到服务器同一目录，跳过第 1 步。
+`.env` 含模型 Key，权限设为 600；没传它会让所有模型调用报「服务端未配置密钥」。
 
 浏览器访问 `http://服务器IP:8000`；防火墙/安全组放行 8000。
 
@@ -120,13 +121,10 @@ ExecStart=/opt/deepseek-chat/.venv/bin/python -m uvicorn server.app:app --host 1
 Restart=always
 RestartSec=3
 User=xiaodi
-Environment=DATA_DIR=/opt/deepseek-chat/data
-# 可选：访问口令（或改用 EnvironmentFile=/opt/deepseek-chat/.env）
-# Environment=ACCESS_PASSWORD=change-me
-# 必需：DeepSeek API Key（模型调用，浏览器不配置）
-Environment=DEEPSEEK_API_KEY=your-deepseek-api-key
-# 可选：高德 Web 服务 Key（Agent 地图工具）
-# Environment=AMAP_KEY=your-amap-web-service-key
+# 推荐：所有配置集中在 .env（含 DEEPSEEK_API_KEY / DATA_DIR / ACCESS_PASSWORD / AMAP_KEY）
+EnvironmentFile=/opt/deepseek-chat/.env
+# 若不用 EnvironmentFile，逐项写在这里也可以；但 unit 默认 0644，明文 Key 有泄露风险
+# Environment=DEEPSEEK_API_KEY=...
 
 [Install]
 WantedBy=multi-user.target
@@ -298,6 +296,8 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data     # SQLite 数据持久化在宿主机 ./data
+    env_file:
+      - .env                 # DEEPSEEK_API_KEY 等；需在宿主机先准备好
     restart: unless-stopped
 ```
 
@@ -318,7 +318,7 @@ services:
 pnpm install && pnpm build
 
 # 电脑上：上传（同网段可用主机名，树莓派默认 raspberrypi.local）
-scp -r dist server requirements.txt starter.py 用户名@板子IP:~/deepseek-chat/
+scp -r .env dist server requirements.txt starter.py 用户名@板子IP:~/deepseek-chat/
 
 # 板子上：装后端并启动
 cd ~/deepseek-chat
@@ -360,8 +360,10 @@ uv venv --python 3.11 --seed .venv      # --seed 装入 pip，依赖安装与系
 
 > 一键脚本：`sudo bash scripts/setup-board.sh` —— 只部署 Python 服务：uvicorn 在
 > `0.0.0.0:8000` 同时托管前端页面与 /api（不装 nginx），systemd 负责自启动与崩溃拉起。
-> 幂等可重跑；`PROJECT_DIR=` `SERVICE_USER=` `BACKEND_PORT=` 环境变量可覆盖默认值；
-> 脚本还会自动清理此前一键脚本创建的 nginx 站点。需要 nginx 时见第 4 节。
+> 幂等可重跑（会先备份原 unit 到 `.bak`）；`PROJECT_DIR=` `PYTHON_BIN=` `UI_DIR=`
+> `SERVICE_USER=` `BACKEND_PORT=` 环境变量可覆盖默认值——非标准布局（如 `python_libs/`、
+> `ui/`）用 `PYTHON_BIN` / `UI_DIR` 指定。脚本会校验 `.env` 的 Key 并收紧权限，
+> 还会清理此前一键脚本创建的 nginx 站点。需要 nginx 时见第 4 节。
 
 ```ini
 # /etc/systemd/system/deepseek-chat.service
@@ -377,8 +379,8 @@ ExecStart=/mnt/usb/deepseek/.venv/bin/python -m uvicorn server.app:app --host 0.
 Restart=always
 RestartSec=3
 User=xiaodi
-Environment=DATA_DIR=/mnt/usb/deepseek/data
-# Environment=ACCESS_PASSWORD=change-me
+# 所有配置集中在 .env（Key / DATA_DIR / ACCESS_PASSWORD），权限 600
+EnvironmentFile=/mnt/usb/deepseek/.env
 
 [Install]
 WantedBy=multi-user.target
@@ -428,10 +430,26 @@ scp -r wheelhouse 用户名@板子IP:~/deepseek-chat/
 
 ## 7. 数据与运维
 
-- **备份**：停服后复制 `data/chats.db`（附件原件也在其中）；`DATA_DIR` 环境变量可改位置。
-- **环境变量**：复制 `.env.example` 为 `.env` 即可配置数据目录与访问口令（`ACCESS_PASSWORD`），
-  `starter.py` 与 uvicorn 都会自动读取；模板见 [.env.example](.env.example)。
-- **升级**：`git pull` → 重新 `pnpm build`（或上传新 dist）→ 重启服务；SQLite 数据不受影响。
+- **备份**：停服后复制 `data/chats.db`（附件原件也在其中）**和 `.env`**（含模型 Key）；
+  `DATA_DIR` 环境变量可改位置，但 systemd 里若硬写了 `Environment=DATA_DIR` 会压过 `.env`，
+  建议统一用 `EnvironmentFile`。
+- **环境变量**：复制 `.env.example` 为 `.env`，填入 `DEEPSEEK_API_KEY`（真实值，不是示例）、
+  可选的 `ACCESS_PASSWORD` / `AMAP_KEY` / `DEEPSEEK_BASE_URL`；`starter.py` 与 uvicorn 都会自动读取。
+  `.env` 权限应为 600，且**不要纳入版本控制或随归档外发**。模板见 [.env.example](.env.example)。
+  解析器支持行尾 `# 注释` 与成对引号；`export ` 前缀仅 Python 侧识别，**systemd
+  EnvironmentFile 不认，不要写**。
+- **限流（可选）**：公网/共享口令部署建议开 `DEEPSEEK_RATE_LIMIT_PER_MIN`（每 IP 每分钟）、
+  `DEEPSEEK_DAILY_LIMIT`（每 IP 每日）；`DEEPSEEK_RATE_BURST` 不填时默认等于每分钟速率。
+  三项全为 0（默认）即关闭。状态在进程内存，重启清零；仅适用于单 worker 形态。
+- **重启 / 停服**：systemd 管的用 `sudo systemctl restart deepseek-chat`；
+  重跑一键脚本 `sudo bash scripts/setup-board.sh` 会自动覆盖 unit 并重启（原 unit 备份为
+  `.bak`）。若之前是手工 `python starter.py` / uvicorn 前台跑的，先用
+  `sudo lsof -ti:8000 | xargs -r kill` 或 `pkill -f "uvicorn server.app:app"` 清掉，
+  否则端口被占会让 systemd 陷入反复重启。
+- **升级**：先停服 → 备份 `data/chats.db` 与 `.env` → 更新代码（新端口请检查 unit 的
+  `EnvironmentFile`）→ 重新 `pnpm build`（或上传新 dist）→ 启动 → `curl /api/health` 确认
+  `deepseek: true`。失败时用备份的 db 与 unit 回滚。当前 schema 只增表不删列，SQLite 通常
+  原地兼容；任何结构变更以版本发布说明为准。
 - **日志**：uvicorn 输出在 systemd journal（`journalctl -u deepseek-chat`）或容器日志里。
 - **多用户语义**：当前是单库共享模型。要每人独立历史，需要新增用户体系（较大改动，尚未实现）。
 
@@ -483,7 +501,10 @@ U 盘挂载点变化的话在 /etc/fstab 固定。
 任意形态部署完成后逐条过一遍：
 
 ```sh
-curl -I http://<地址>/api/health          # 200 + {"ok":true,...}
+curl -s http://<地址>/api/health
+# 期望：ok/dbWritable=true、deepseek=true、keySource=env
+#   schemaVersion == expectedSchemaVersion（迁移滞后时不等）
+#   keySource=placeholder 表示 .env 里还是示例值，需替换真实 Key
 curl -I http://<地址>/                    # 200，内容是 index.html（前端页面）
 curl -I http://<地址>/static/$(ls dist/static/js | head -1 | sed 's|^|js/|')
                                           # 200 + Cache-Control（immutable 或 30d）

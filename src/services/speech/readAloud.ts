@@ -60,13 +60,19 @@ export const describeReadAloudError = (error: unknown): TranslationMessage | str
   if (error instanceof ApiError && error.kind === 'protocol') {
     return error.message
   }
+  if (error instanceof ApiError && error.kind === 'keyMissing') {
+    return { key: 'serverKeyMissing' }
+  }
   // 400 表示这段正文服务端无法合成，与其余失败区分开
   if (error instanceof ApiError && error.status === 400) {
     return { key: 'ttsUnavailable' }
   }
   switch (classifyApiError(error)) {
     case 'unauthorized':
-      return { key: 'apiKeyInvalidRetry' }
+      // 代理透传的上游 Key 失效带 code；没有 code 的是本机访问口令失效
+      return error instanceof ApiError && error.code
+        ? { key: 'apiKeyInvalidRetry' }
+        : { key: 'accessKeyInvalid' }
     case 'insufficientBalance':
       return { key: 'insufficientBalance' }
     case 'rateLimited':

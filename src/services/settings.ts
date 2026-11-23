@@ -19,6 +19,28 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 /** 界面整体字号档位；默认中等 */
 export type FontSizePreference = 's' | 'm' | 'l'
 
+/**
+ * 推理强度：请求时映射为 output_config.effort。
+ * 上游实际只有 low/high/max 三档；界面上的「关闭」是 thinking=false，不是 effort 值。
+ */
+export type ReasoningEffort = 'low' | 'high' | 'max'
+
+/** 界面的四档：off=关闭思考，其余三档对应 reasoningEffort */
+export type EffortLevel = 'off' | ReasoningEffort
+
+/** 把「思考开关 + 强度」归一成界面档位 */
+export const effortLevel = (thinking: boolean, effort: ReasoningEffort): EffortLevel =>
+  thinking ? effort : 'off'
+
+/** 把界面档位还原成思考开关与强度；关闭时保留原强度，方便重新打开时恢复 */
+export const applyEffortLevel = (
+  level: EffortLevel,
+  current: ReasoningEffort
+): { thinking: boolean; reasoningEffort: ReasoningEffort } =>
+  level === 'off'
+    ? { thinking: false, reasoningEffort: current }
+    : { thinking: true, reasoningEffort: level }
+
 import './storageKeys.js'
 
 /** 本机设置，存 localStorage：语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态。模型 API Key 已移至服务端 .env。 */
@@ -28,6 +50,8 @@ type Settings = {
   location: UserLocation | null
   ttsVoice: TtsVoice
   thinking: boolean
+  /** 推理强度；思考关闭时不生效。默认 high 与服务端默认行为一致 */
+  reasoningEffort: ReasoningEffort
   search: boolean
   siderCollapsed: boolean
   /** 聊天模型，默认 deepseek-flash */
@@ -59,7 +83,6 @@ type Settings = {
   /** 今日预估费用达到该金额时提醒一次（¥）；0 表示关闭 */
   usageDailyQuota: number
   /** 自定义 API 服务地址；null 使用构建期默认值 */
-  apiOrigin: string | null
   /** 自定义系统提示词（人设），随每次请求发送；空串表示未设置 */
   systemPrompt: string
   /** 界面字号档位，默认中等 */
@@ -72,6 +95,7 @@ const KEYS = {
   themePreference: 'deepseek-chat:theme-preference',
   ttsVoice: 'deepseek-chat:tts-voice',
   thinking: 'deepseek-chat:thinking',
+  reasoningEffort: 'deepseek-chat:reasoning-effort',
   search: 'deepseek-chat:search',
   siderCollapsed: 'deepseek-chat:sider-collapsed',
   chatModel: 'deepseek-chat:chat-model',
@@ -90,7 +114,6 @@ const KEYS = {
   amapOptOut: 'deepseek-chat:amap-optout',
   usageFreeServerTools: 'deepseek-chat:usage-free-server-tools',
   usageDailyQuota: 'deepseek-chat:usage-daily-quota',
-  apiOrigin: 'deepseek-chat:api-origin',
   systemPrompt: 'deepseek-chat:system-prompt',
   fontSize: 'deepseek-chat:font-size',
 } as const
@@ -196,19 +219,25 @@ const initialMaxTokens = (): number | null => {
   return Number.isInteger(value) && value > 0 ? value : null
 }
 
-/** 自定义地址去掉末尾斜杠；必须是 http(s) 完整地址，否则忽略 */
-const normalizeApiOrigin = (value: string | null): string | null => {
-  const trimmed = value?.trim().replace(/\/+$/, '') ?? ''
-  return /^https?:\/\/.+/i.test(trimmed) ? trimmed : null
-}
-
-const initialApiOrigin = (): string | null => normalizeApiOrigin(read(KEYS.apiOrigin))
-
 const initialSystemPrompt = (): string => read(KEYS.systemPrompt) ?? ''
 
 const initialFontSize = (): FontSizePreference => {
   const saved = read(KEYS.fontSize)
   return saved === 's' || saved === 'l' ? saved : 'm'
+}
+
+const REASONING_EFFORTS: readonly ReasoningEffort[] = ['low', 'high', 'max']
+
+const initialReasoningEffort = (): ReasoningEffort => {
+  const saved = read(KEYS.reasoningEffort)
+  // 旧版本的 medium 档已移除，迁移到 high（两者上游映射相同）
+  if (saved === 'medium') {
+    write(KEYS.reasoningEffort, 'high')
+    return 'high'
+  }
+  return REASONING_EFFORTS.includes(saved as ReasoningEffort)
+    ? (saved as ReasoningEffort)
+    : 'high'
 }
 
 const initialChatMode = (): ChatMode => {
@@ -248,6 +277,7 @@ export const useSettings = create<Settings>(() => ({
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
   thinking: read(KEYS.thinking) === 'true',
+  reasoningEffort: initialReasoningEffort(),
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
   chatModel: initialChatModel(),
@@ -264,7 +294,6 @@ export const useSettings = create<Settings>(() => ({
   enabledToolNames: initialEnabledTools(),
   usageFreeServerTools: initialFlag(KEYS.usageFreeServerTools, true),
   usageDailyQuota: Math.max(0, Number(read(KEYS.usageDailyQuota)) || 0),
-  apiOrigin: initialApiOrigin(),
   systemPrompt: initialSystemPrompt(),
   fontSize: initialFontSize(),
 }))
@@ -304,6 +333,11 @@ export const setTtsVoice = (ttsVoice: TtsVoice) => {
 export const setThinking = (thinking: boolean) => {
   write(KEYS.thinking, String(thinking))
   useSettings.setState({ thinking })
+}
+
+export const setReasoningEffort = (reasoningEffort: ReasoningEffort) => {
+  write(KEYS.reasoningEffort, reasoningEffort)
+  useSettings.setState({ reasoningEffort })
 }
 
 export const setSearch = (search: boolean) => {
@@ -442,12 +476,6 @@ export const setMaxTokens = (maxTokens: number | null) => {
 }
 
 /** 传 null 恢复构建期默认地址 */
-export const setApiOrigin = (apiOrigin: string | null) => {
-  const origin = normalizeApiOrigin(apiOrigin)
-  write(KEYS.apiOrigin, origin)
-  useSettings.setState({ apiOrigin: origin })
-}
-
 export const setSystemPrompt = (systemPrompt: string) => {
   const trimmed = systemPrompt.trim()
   write(KEYS.systemPrompt, trimmed || null)

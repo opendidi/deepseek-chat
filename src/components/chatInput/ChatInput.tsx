@@ -8,10 +8,9 @@ import {
   IconPaperclipOutline16,
   IconSendOutline16,
   IconStopFill16,
-  IconThinkOutline14,
 } from '../base/icons.js'
 import { Menu, type MenuOption } from '../base/Menu.js'
-import { setChatModel, setSearch, setThinking, useSettings } from '../../services/settings.js'
+import { setChatModel, setSearch, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import { getVisibleMessages } from '../../services/chat/branches.js'
@@ -73,7 +72,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const streaming = useChatStore(
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
-  const thinking = useSettings((state) => state.thinking)
   const chatMode = useSettings((state) => state.chatMode)
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
@@ -416,18 +414,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       <div className={styles.functionRow}>
         {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
-          <Tooltip content={t('deactivatedThinkTooltip')}>
-            <button
-              type="button"
-              className={clsx(styles.toggle, thinking && styles.selected)}
-              aria-label={t('thinkingSwitch')}
-              aria-pressed={thinking}
-              onClick={() => setThinking(!thinking)}
-            >
-              <IconThinkOutline14 />
-              <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
-            </button>
-          </Tooltip>
           <Tooltip content={t('deactivatedSearchTooltip')}>
             <button
               type="button"

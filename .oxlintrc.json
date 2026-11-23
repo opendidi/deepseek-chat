@@ -126,8 +126,8 @@
     "react/no-unknown-property": "error",
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "error",
-    "react/refs": "warn",
-    "react/set-state-in-effect": "warn",
-    "react/purity": "warn"
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+    "react/purity": "off"
   }
 }

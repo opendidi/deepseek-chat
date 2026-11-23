@@ -3,8 +3,12 @@
 覆盖前端全部模型调用：/models 校验与列表、Anthropic 兼容 Files 上传与 messages 流式、
 语音 ASR / TTS。上游统一加 Authorization: Bearer，浏览器侧不再传 x-api-key。
 
-未配置 Key 时 raise DeepSeekError('DEEPSEEK_KEY_MISSING')，路由层转成 400 + 固定 code，
-前端据此提示「服务端未配置密钥」并给部署引导，而不是当成用户输入错误。
+错误分两类处理：
+- 非流端点：raise DeepSeekError，路由层转成 JSON 状态码；
+- 流式端点：响应头一旦发出就无法改状态码，改为 yield 一条 `event: error` SSE 帧，
+  前端 client.ts 据此还原出带 status/code 的 ApiError，避免把限流/余额不足吞成通用错误。
+
+未配置 Key 时 raise DeepSeekError('DEEPSEEK_KEY_MISSING')，路由层转成 400 + 固定 code。
 """
 
 from __future__ import annotations
@@ -17,7 +21,15 @@ import httpx
 from .config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
 
 DEEPSEEK_KEY_MISSING = 'DEEPSEEK_KEY_MISSING'
-UPSTREAM_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=60.0, pool=10.0)
+UPSTREAM_ERROR = 'UPSTREAM_ERROR'
+UPSTREAM_UNREACHABLE = 'UPSTREAM_UNREACHABLE'
+
+# SSE 长连接需要较长 read 超时且有 ping 保活；其余端点应快速失败，避免占用 worker。
+SSE_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=60.0, pool=10.0)
+API_TIMEOUT = httpx.Timeout(connect=10.0, read=45.0, write=60.0, pool=10.0)
+
+# 回显给浏览器的上游文案上限，避免超长内容或内部路径直接暴露
+MAX_ERROR_MESSAGE = 500
 
 
 class DeepSeekError(Exception):
@@ -31,10 +43,10 @@ class DeepSeekError(Exception):
 
 
 class UpstreamResponseError(DeepSeekError):
-    """上游返回了明确错误，原样透传状态码与消息给前端。"""
+    """上游返回了明确错误，透传状态码与消息给前端。"""
 
-    def __init__(self, status: int, message: str):
-        super().__init__('UPSTREAM_ERROR', message, status)
+    def __init__(self, status: int, message: str, code: str = UPSTREAM_ERROR):
+        super().__init__(code, message, status)
 
 
 def require_key() -> str:
@@ -46,19 +58,28 @@ def require_key() -> str:
     return DEEPSEEK_API_KEY
 
 
-def auth_headers() -> dict[str, str]:
-    return {
-        'Authorization': f'Bearer {require_key()}',
-        'Accept': 'application/json',
-    }
+def auth_headers(key: str, **extra: str) -> dict[str, str]:
+    """统一的鉴权头；Key 由调用方一次取出后传入，避免生成器内重复检查。"""
+    return {'Authorization': f'Bearer {key}', **extra}
+
+
+async def _get(path: str, headers: dict[str, str]) -> bytes:
+    async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
+        response = await client.get(f'{DEEPSEEK_BASE_URL}{path}', headers=headers)
+    _raise_for_upstream(response)
+    return response.content
+
+
+async def _post(path: str, headers: dict[str, str], **kwargs) -> bytes:
+    async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
+        response = await client.post(f'{DEEPSEEK_BASE_URL}{path}', headers=headers, **kwargs)
+    _raise_for_upstream(response)
+    return response.content
 
 
 async def get_models() -> bytes:
     """GET /models：用于 Key 校验和云端模型列表，不产生费用。"""
-    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
-        response = await client.get(f'{DEEPSEEK_BASE_URL}/models', headers=auth_headers())
-    _raise_for_upstream(response)
-    return response.content
+    return await _get('/models', auth_headers(require_key(), Accept='application/json'))
 
 
 async def upload_file(
@@ -71,78 +92,99 @@ async def upload_file(
     data: dict[str, str] = {}
     if purpose:
         data['purpose'] = purpose
-    headers = {
-        'Authorization': f'Bearer {require_key()}',
-        'anthropic-beta': 'files-api-2025-04-14',
-    }
-    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
-        response = await client.post(
-            f'{DEEPSEEK_BASE_URL}/anthropic/v1/files',
-            headers=headers,
-            data=data,
-            files={'file': (filename, file_bytes, content_type or 'application/octet-stream')},
+    return await _post(
+        '/anthropic/v1/files',
+        auth_headers(require_key(), **{'anthropic-beta': 'files-api-2025-04-14'}),
+        data=data,
+        files={'file': (filename, file_bytes, content_type or 'application/octet-stream')},
+    )
+
+
+async def stream_messages(body: bytes, key: str) -> AsyncIterator[bytes]:
+    """POST /anthropic/v1/messages：逐块转发上游 SSE；错误转成 error 帧而非异常。
+
+    生成器内的异常发生在响应头（200 + text/event-stream）已发出之后，路由层无法改状态码，
+    因此这里主动把上游错误与网络异常编码成前端可识别的 SSE error 帧。
+    """
+    try:
+        headers = auth_headers(
+            key,
+            **{
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'anthropic-beta': 'files-api-2025-04-14',
+            }
         )
-    _raise_for_upstream(response)
-    return response.content
-
-
-async def stream_messages(body: bytes) -> AsyncIterator[bytes]:
-    """POST /anthropic/v1/messages：逐块转发上游 SSE，不做解析以免破坏事件边界。"""
-    headers = {
-        'Authorization': f'Bearer {require_key()}',
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-        'anthropic-beta': 'files-api-2025-04-14',
-    }
-    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
-        async with client.stream(
-            'POST',
-            f'{DEEPSEEK_BASE_URL}/anthropic/v1/messages',
-            headers=headers,
-            content=body,
-        ) as response:
-            if response.status_code >= 400:
-                detail = await response.aread()
-                _raise_upstream(response.status_code, detail)
-            async for chunk in response.aiter_bytes():
-                yield chunk
+        async with httpx.AsyncClient(timeout=SSE_TIMEOUT) as client:
+            async with client.stream(
+                'POST',
+                f'{DEEPSEEK_BASE_URL}/anthropic/v1/messages',
+                headers=headers,
+                content=body,
+            ) as response:
+                if response.status_code >= 400:
+                    detail = await response.aread()
+                    error = _upstream_error(response.status_code, detail)
+                    yield _sse_error(error)
+                    return
+                try:
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+                except (httpx.HTTPError, OSError) as error:
+                    yield _sse_error(
+                        DeepSeekError(
+                            UPSTREAM_UNREACHABLE, _network_message(error), 502
+                        )
+                    )
+    except (httpx.HTTPError, OSError) as error:
+        yield _sse_error(DeepSeekError(UPSTREAM_UNREACHABLE, _network_message(error), 502))
 
 
 async def transcribe(audio: bytes, filename: str, content_type: str) -> bytes:
     """POST /v1/tools/asr：语音识别。"""
-    headers = {'Authorization': f'Bearer {require_key()}'}
-    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
-        response = await client.post(
-            f'{DEEPSEEK_BASE_URL}/v1/tools/asr',
-            headers=headers,
-            files={'file': (filename, audio, content_type or 'audio/wav')},
-        )
-    _raise_for_upstream(response)
-    return response.content
+    return await _post(
+        '/v1/tools/asr',
+        auth_headers(require_key()),
+        files={'file': (filename, audio, content_type or 'audio/wav')},
+    )
 
 
 async def synthesize(payload: bytes) -> bytes:
     """POST /v1/tools/tts：语音合成，返回裸 PCM 字节。"""
-    headers = {
-        'Authorization': f'Bearer {require_key()}',
-        'Content-Type': 'application/json',
-    }
-    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
-        response = await client.post(
-            f'{DEEPSEEK_BASE_URL}/v1/tools/tts',
-            headers=headers,
-            content=payload,
-        )
-    _raise_for_upstream(response)
-    return response.content
+    return await _post(
+        '/v1/tools/tts',
+        auth_headers(require_key(), **{'Content-Type': 'application/json'}),
+        content=payload,
+    )
+
+
+def _network_message(error: BaseException) -> str:
+    """网络异常转成可展示文案；不回显底层异常对象（可能含 URL 或内部细节）。"""
+    if isinstance(error, httpx.TimeoutException):
+        return '模型服务响应超时，请稍后重试。'
+    return '无法连接模型服务，请检查网络或上游地址后重试。'
+
+
+def _sse_error(error: DeepSeekError) -> bytes:
+    """编码成前端 readServerSentEvents 能解析、client.ts 能还原 status/code 的帧。"""
+    payload = json.dumps(
+        {
+            'error': {'message': error.message},
+            'status': error.status,
+            'code': error.code,
+        },
+        ensure_ascii=False,
+    )
+    return f'event: error\ndata: {payload}\n\n'.encode('utf-8')
 
 
 def _raise_for_upstream(response: httpx.Response) -> None:
     if response.status_code >= 400:
-        _raise_upstream(response.status_code, response.content)
+        raise _upstream_error(response.status_code, response.content)
 
 
-def _raise_upstream(status: int, content: bytes) -> None:
+def _upstream_error(status: int, content: bytes) -> DeepSeekError:
+    """解析上游错误体，提取可展示文案；兼容 error 为 dict / 字符串 / 顶层 message。"""
     message = ''
     try:
         body = json.loads(content)
@@ -150,8 +192,15 @@ def _raise_upstream(status: int, content: bytes) -> None:
             error = body.get('error')
             if isinstance(error, dict) and isinstance(error.get('message'), str):
                 message = error['message']
+            elif isinstance(error, str):
+                message = error
+            elif isinstance(body.get('message'), str):
+                message = body['message']
             elif isinstance(body.get('detail'), str):
                 message = body['detail']
     except (ValueError, UnicodeDecodeError):
         pass
-    raise UpstreamResponseError(status, message or f'模型服务返回 {status}')
+    if not message:
+        message = f'模型服务返回 {status}'
+    return UpstreamResponseError(status, message[:MAX_ERROR_MESSAGE])
+

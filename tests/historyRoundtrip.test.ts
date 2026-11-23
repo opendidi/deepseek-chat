@@ -1,6 +1,3 @@
-import { API_ORIGIN_SHIM } from './helpers/apiOrigin.js'
-// 导入即注入 __API_ORIGIN__ 全局量，须先于下方间接引用 client.js 的模块
-void API_ORIGIN_SHIM
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { toSessionFile } from '../src/services/chat/history/toArchive.js'

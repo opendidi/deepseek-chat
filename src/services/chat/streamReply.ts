@@ -1,6 +1,7 @@
 import { translate } from '../../i18n/index.js'
 import { showToast } from '../../components/base/toastState.js'
 import { ApiError, streamMessage } from '../api/client.js'
+import { effortConfigFor } from '../api/types.js'
 import type { MessageUsage } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
@@ -357,6 +358,8 @@ export const streamReply = async (
           }
           flush()
         }
+        // 推理强度与思考开关来自本轮回复快照，工具往返的每一轮都相同
+        const effort = effortConfigFor(initial.thinking, initial.reasoningEffort)
         for (let turn = 0; ; turn += 1) {
           const blockStart = reply.blocks.length
           const stepStart = (reply.toolSteps ?? []).length
@@ -367,6 +370,7 @@ export const streamReply = async (
               system,
               messages: requestMessages,
               thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+              ...(effort ? { output_config: effort } : {}),
               ...(settings.skipSafetyCheck ? {} : { safety_check: SAFETY_CHECK }),
               tools,
               ...(runtime.titleRequests.has(controller) ? { title: { enabled: true } } : {}),
@@ -515,6 +519,7 @@ export const streamReply = async (
               kind: error.kind,
               message: error.message,
               status: error.status,
+              code: error.code,
               localMessage: error.localMessage,
             },
             keepRefusedContent,

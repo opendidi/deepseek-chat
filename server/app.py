@@ -1,6 +1,6 @@
 """FastAPI 应用装配：lifespan、路由聚合、托管 dist/ 静态产物。
 
-本机单用户服务，绑定 127.0.0.1；接口与前端 src/services/chat/db.ts 的函数一一对应，
+接口与前端 src/services/chat/db.ts 的函数一一对应；本地开发默认绑定 127.0.0.1，
 存储语义见 storage 包（server/storage/）的模块注释，路由实现在 server/routers/。
 
 静态托管开关：默认托管 dist/（生产单端口形态）；设置 SERVE_DIST=0 后为纯 API 服务
@@ -19,9 +19,19 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import AMAP_KEY, DATA_DIR, DEEPSEEK_API_KEY, DIST_DIR
+from .config import (
+    AMAP_KEY,
+    DATA_DIR,
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_BASE_URL,
+    DEEPSEEK_KEY_SOURCE,
+    DIST_DIR,
+)
 from .routers import ROUTERS
+from .rateLimit import DeepSeekRateLimitMiddleware
 from .storage import configure
+from .storage import core as storage_core
+from .uploadLimit import DeepSeekUploadLimitMiddleware
 
 
 @asynccontextmanager
@@ -37,6 +47,14 @@ app = FastAPI(title='deepseek-chat', lifespan=_lifespan, docs_url=None, redoc_ur
 # 对 >1KB 的 JSON / js / css 响应生效（Accept-Encoding: gzip 时），
 # 677KB 的主包在远程访问下降到约 220KB。
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+# 模型代理的上传体积限制：只作用于 /api/deepseek/files 与 /tools/asr，
+# 在最外层拦截，避免超大 multipart 先被解析进内存造成 OOM。
+app.add_middleware(DeepSeekUploadLimitMiddleware)
+
+# 模型代理的按 IP 限流：Key 移到服务端后，公网/共享口令部署下防止 Key 被盗刷。
+# 放在口令中间件内侧——只有通过鉴权的请求才计数，错口令的重试不消耗桶。
+app.add_middleware(DeepSeekRateLimitMiddleware)
 
 # 访问口令（可选）：设置 ACCESS_PASSWORD 环境变量后，除健康检查外的全部 /api 请求
 # 必须携带 x-access-key 头。用于公网部署时挡住无鉴权的数据读写；本地自用不设即完全关闭。
@@ -89,7 +107,33 @@ async def static_cache_headers(request: Request, call_next):
 
 @app.get('/api/health')
 def health() -> dict:
-    return {'ok': True, 'amap': bool(AMAP_KEY), 'deepseek': bool(DEEPSEEK_API_KEY)}
+    """自检：deepseek 必须与 keySource 一起看；schemaVersion 是 DB 实际版本，不是代码常量。"""
+    db_writable = False
+    actual_schema = 0
+    try:
+        conn = storage_core.connect()
+        try:
+            actual_schema = conn.execute('PRAGMA user_version').fetchone()[0]
+            # 只读 SELECT 恒成功，无法证明可写。BEGIN IMMEDIATE 申请写锁，
+            # 只读文件/磁盘满/WAL 异常时会失败；随即回滚，不改动任何数据。
+            conn.execute('BEGIN IMMEDIATE')
+            conn.rollback()
+            db_writable = True
+        finally:
+            conn.close()
+    except Exception:
+        # 数据库不可用时 health 仍应返回，让运维看到具体哪项失败
+        pass
+    return {
+        'ok': db_writable,
+        'amap': bool(AMAP_KEY),
+        'deepseek': bool(DEEPSEEK_API_KEY),
+        'keySource': DEEPSEEK_KEY_SOURCE,
+        'baseUrl': DEEPSEEK_BASE_URL,
+        'schemaVersion': actual_schema,
+        'expectedSchemaVersion': storage_core.SCHEMA_VERSION,
+        'dbWritable': db_writable,
+    }
 
 
 for _router in ROUTERS:

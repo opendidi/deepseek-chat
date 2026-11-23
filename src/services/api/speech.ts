@@ -1,12 +1,10 @@
-import { ApiError, request } from './client.js'
+import { ApiError, DEEPSEEK_TOOLS_PROXY, request } from './client.js'
 
 /**
  * 语音接口（经服务端代理，Key 只在 .env）：
  * - ASR：POST /api/deepseek/tools/asr，multipart 上传 WAV / Ogg Opus，一次返回全文
  * - TTS：POST /api/deepseek/tools/tts，返回音频字节流（产出首帧后即返回 200）
  */
-const TOOLS_PROXY = '/api/deepseek/tools'
-
 export type TtsVoice = 'stella' | 'tide'
 
 /** TTS 输出的裸 PCM 参数：24kHz、单声道、16-bit 小端 */
@@ -16,7 +14,7 @@ export const TTS_SAMPLE_RATE = 24000
 export const transcribe = async (audio: Blob, signal?: AbortSignal): Promise<string> => {
   const form = new FormData()
   form.append('file', audio, 'recording.wav')
-  const response = await request(`${TOOLS_PROXY}/asr`, {
+  const response = await request(`${DEEPSEEK_TOOLS_PROXY}/asr`, {
     method: 'POST',
     body: form,
     signal,
@@ -45,7 +43,7 @@ export const synthesize = async (
   voice: TtsVoice,
   signal: AbortSignal
 ): Promise<ReadableStream<Uint8Array>> => {
-  const response = await request(`${TOOLS_PROXY}/tts`, {
+  const response = await request(`${DEEPSEEK_TOOLS_PROXY}/tts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, voice_id: voice, format: 'pcm', filter_markdown: true }),

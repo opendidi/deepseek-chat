@@ -206,6 +206,8 @@ export type CreateMessageRequest = {
   system: string
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
+  /** 思考开启时的推理强度；上游只支持 low/high/max，关闭思考时不传 */
+  output_config?: { effort: 'low' | 'high' | 'max' }
   tools: (DeepseekWebSearchTool | DeepseekReadUrlTool | ClientToolParam)[]
   /** 缺省时不携带，服务端按默认检查档处理 */
   safety_check?: { level: 'high' }
@@ -217,6 +219,16 @@ export type CreateMessageRequest = {
   /** 单次回复的最大输出 Token；缺省时使用服务端默认值 */
   max_tokens?: number
 }
+
+/**
+ * 思考关闭时不传强度（上游会忽略）；开启时按消息记录的强度构造 output_config。
+ * 上游实际只有 low/high/max 三档；思考关闭时不传（界面上的「关闭」不是 effort 值）。
+ */
+export const effortConfigFor = (
+  thinking: boolean | undefined,
+  effort: 'low' | 'high' | 'max' | undefined
+): CreateMessageRequest['output_config'] =>
+  thinking ? { effort: effort ?? 'high' } : undefined
 
 // ---------- 响应：流式事件 ----------
 

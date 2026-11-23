@@ -1,6 +1,4 @@
-import { API_ORIGIN_SHIM } from './helpers/apiOrigin.js'
 // 语音与备份链路间接引用 api/client.js，先注入构建期常量
-void API_ORIGIN_SHIM
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { describeReadAloudError } from '../src/services/speech/readAloud.js'

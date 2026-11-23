@@ -280,9 +280,9 @@ export const en = {
   uploadUnsupportedFormat:
     'The selected files include unsupported formats. Please convert them and try again. Supported: PDF, DOC, XLSX, PPT, images, text, code, and more.',
   uploadFileStatusFailed: 'Upload failed',
+  serverKeyMissing: 'The server has no model key configured. Set DEEPSEEK_API_KEY in .env and restart the service.',
   uploadRetry: '{message}. Click to retry',
   chatInputPlaceholderChat: 'Enter a message',
-  deactivatedThinkTooltip: 'Think before responding to solve reasoning problems',
   thinkingSwitch: 'DeepThink',
   deactivatedSearchTooltip: 'Search the web when necessary',
   search: 'Search',
@@ -329,6 +329,9 @@ export const en = {
   modelFetching: 'Fetching…',
   modelBuiltinTag: 'Built-in',
   modelCloudTag: 'Cloud',
+  reasoningEffort: 'Reasoning effort',
+  reasoningEffortMaxCost: 'Uses quota faster',
+  modelBack: 'Back',
   modelBuiltinList: 'Using built-in model list',
   modelCloudList: 'Using cloud model list',
   modelUseBuiltin: 'Switch back',
@@ -438,10 +441,6 @@ export const en = {
   usageToolsMs: 'Time',
   settingsDefaultPlaceholder: 'Default',
   settingsInvalidNumber: 'Enter a valid number',
-  settingsApiOrigin: 'API origin',
-  settingsApiOriginDesc:
-    'Defaults to https://api.deepseek.com. Point it at a compatible service instead.',
-  settingsApiOriginInvalid: 'Invalid origin. Use a full URL starting with http(s)://',
   lightboxOpen: 'View image',
   lightboxDownload: 'Download image',
   promptLibrary: 'Prompt library',
@@ -513,4 +512,5 @@ export const en = {
   accessGateTitle: 'This service requires an access key',
   accessGatePlaceholder: 'Enter access key',
   accessGateInvalid: 'Incorrect access key. Please try again.',
+  accessKeyInvalid: 'The access key has expired. Please re-enter it.',
 } satisfies Record<keyof typeof zh, string>

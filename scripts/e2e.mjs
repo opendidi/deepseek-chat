@@ -220,11 +220,73 @@ try {
   const panel = await evaluate(`(() => {
     const p = document.querySelector('[role="dialog"]');
     const r = p.getBoundingClientRect();
-    return { width: Math.round(r.width), cards: p.querySelectorAll('[role="radio"]').length };
+    const slider = p.querySelector('input[type="range"]');
+    return {
+      width: Math.round(r.width),
+      compactSlider: !!slider,
+      compactCards: p.querySelectorAll('[role="radio"]').length,
+      effortMax: slider ? Number(slider.max) : -1,
+      effortValue: slider ? Number(slider.value) : -1,
+    };
   })()`)
+  // 默认紧凑面板直接可调强度：切到极高再切回
+  const setEffort = (value) => evaluate(`(() => {
+    const s = document.querySelector('[role="dialog"] input[type="range"]');
+    if (!s) return;
+    // React 受控组件需要原生 value setter 才能触发 onChange
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(s, '${value}');
+    s.dispatchEvent(new Event('input', { bubbles: true }));
+    s.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`)
+  await setEffort('3')
+  const effortChanged = await evaluate(
+    `localStorage.getItem('deepseek-chat:reasoning-effort') === 'max' && localStorage.getItem('deepseek-chat:thinking') === 'true'`
+  )
+  // Max 档：提示替换标题行右侧的档位名，只出现一次（不再额外占一行）
+  const maxCostShownOnce = await evaluate(`(() => {
+    const p = document.querySelector('[role="dialog"]');
+    const hits = (p?.textContent || '').split('更快消耗使用额度').length - 1;
+    return hits === 1;
+  })()`)
+  await setEffort('0') // 切回关闭档，避免影响后续聊天请求
+  // 点模型行：进入完整模型列表
+  await evaluate(`(() => {
+    const p = document.querySelector('[role="dialog"]');
+    const row = [...p.querySelectorAll('button')].find((b) => /DeepSeek/i.test(b.textContent || ''));
+    if (row) row.click();
+  })()`)
+  await waitFor(() => evaluate(`document.querySelectorAll('[role="dialog"] [role="radio"]').length > 0`))
+  const modelCards = await evaluate(`document.querySelectorAll('[role="dialog"] [role="radio"]').length`)
+  // 选一个模型：回到紧凑面板
+  await evaluate(`document.querySelector('[role="dialog"] [role="radio"]').click()`)
+  await waitFor(() => evaluate(`!!document.querySelector('[role="dialog"] input[type="range"]')`))
+  const backToCompact = await evaluate(
+    `document.querySelectorAll('[role="dialog"] [role="radio"]').length === 0 && !!document.querySelector('[role="dialog"] input[type="range"]')`
+  )
+  // 再进列表，用标题左侧返回按钮回紧凑面板
+  await evaluate(`(() => {
+    const p = document.querySelector('[role="dialog"]');
+    const row = [...p.querySelectorAll('button')].find((b) => /DeepSeek/i.test(b.textContent || ''));
+    if (row) row.click();
+  })()`)
+  await waitFor(() => evaluate(`document.querySelectorAll('[role="dialog"] [role="radio"]').length > 0`))
+  await evaluate(`document.querySelector('[role="dialog"] button[aria-label="返回"]').click()`)
+  await waitFor(() => evaluate(`!!document.querySelector('[role="dialog"] input[type="range"]')`))
+  const backArrowWorks = await evaluate(
+    `document.querySelectorAll('[role="dialog"] [role="radio"]').length === 0`
+  )
+  // 再进列表测云端获取
+  await evaluate(`(() => {
+    const p = document.querySelector('[role="dialog"]');
+    const row = [...p.querySelectorAll('button')].find((b) => /DeepSeek/i.test(b.textContent || ''));
+    if (row) row.click();
+  })()`)
+  await waitFor(() => evaluate(`document.querySelectorAll('[role="dialog"] [role="radio"]').length > 0`))
   await evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find(b => /从云端获取/.test(b.textContent)).click()`)
   await waitFor(async () => (await evaluate(`document.querySelectorAll('[role="radio"]').length`)) === 3)
   const cloudCount = await evaluate(`document.querySelectorAll('[role="radio"]').length`)
+
   await evaluate(`document.querySelector('button[aria-label="选择模型"]').click()`)
   await waitFor(async () => !(await evaluate(`!!document.querySelector('[role="dialog"]')`)))
 
@@ -433,9 +495,6 @@ try {
       }
       await mcall('Page.enable')
       await mcall('Runtime.enable')
-      await mcall('Page.addScriptToEvaluateOnNewDocument', {
-        source: `// 模型 Key 已移至服务端 .env，前端不再注入`,
-      })
       await mcall('Page.navigate', { url: BASE })
       let mobileReady = false
       for (let i = 0; i < 80; i += 1) {
@@ -460,6 +519,16 @@ try {
     cssLoaded: cssResponses.length > 0 && cssResponses.every((status) => status === 200 || status === 304),
     brandColor: styles.brand === '#3964fe',
     panelWidth: panel.width === 300,
+    effortSplit:
+      panel.compactSlider &&
+      panel.compactCards === 0 &&
+      panel.effortMax === 3 &&
+      panel.effortValue === 0 &&
+      effortChanged &&
+      maxCostShownOnce &&
+      modelCards === 2 &&
+      backToCompact &&
+      backArrowWorks,
     cloudModels: cloudCount === 3,
     menuItems: menuItems.join('/') === '引用/复制',
     quoteSubmitted: quoted.containsQuote,

@@ -1,6 +1,4 @@
-import { API_ORIGIN_SHIM } from './helpers/apiOrigin.js'
 // 工具策略与协议层可能间接引用 api/client.js，先注入构建期常量
-void API_ORIGIN_SHIM
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { MessageParam, MessageUsage } from '../src/services/api/types.js'

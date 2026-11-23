@@ -1,5 +1,3 @@
-import { API_ORIGIN_SHIM } from './helpers/apiOrigin.js'
-void API_ORIGIN_SHIM
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { MessageParam } from '../src/services/api/types.js'

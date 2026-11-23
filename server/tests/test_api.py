@@ -66,6 +66,12 @@ def test_health(client):
     assert data['ok'] is True
     # amap 字段随服务器 AMAP_KEY 配置变化，只断言存在
     assert 'amap' in data
+    # 自检字段：含义见 DEPLOY.md 的部署后验证清单
+    assert data['dbWritable'] is True
+    assert data['keySource'] in ('env', 'placeholder', 'unset')
+    assert data['schemaVersion'] >= 1
+    assert data['baseUrl'].startswith('http')
+    assert data['deepseek'] is (data['keySource'] == 'env')
 
 
 def test_save_and_get_roundtrip(client):

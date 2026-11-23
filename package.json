@@ -11,7 +11,7 @@
     "dev:all": "node scripts/devall.mjs",
     "build": "cross-env NODE_ENV=production rspack build -c rspack.config.ts",
     "type": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && node --import ./tests/helpers/register-hooks.mjs --test \".test-build/tests/*.test.js\"",
+    "test": "tsc -p tsconfig.test.json && node --test \".test-build/tests/*.test.js\"",
     "test:backend": "node scripts/pytest.mjs",
     "lint": "oxlint src tests rspack.config.ts",
     "format": "oxfmt --write .",

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { LinkedMessage, TranslationMessage } from '../i18n/index.js'
-import { uploadFile } from './api/client.js'
+import { ApiError, uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
 import type { FilePurpose } from './api/types.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
@@ -54,6 +54,9 @@ export const validateFiles = (files: File[], currentCount: number): TranslationM
  * 服务端原文多为英文且较长，不直接展示。
  */
 export const describeUploadError = (error: unknown): TranslationMessage => {
+  if (error instanceof ApiError && error.kind === 'keyMissing') {
+    return { key: 'serverKeyMissing' }
+  }
   if (classifyApiError(error) === 'serverBusy') {
     return { key: 'uploadServerBusy' }
   }
