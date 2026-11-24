@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from pathlib import Path
@@ -64,12 +65,6 @@ CREATE TABLE IF NOT EXISTS mcp_config (
   payload TEXT NOT NULL DEFAULT '{}',
   updated_at INTEGER NOT NULL DEFAULT 0
 );
--- MCP 服务器配置：单行 JSON，与会话数据一起备份/迁移；设置页动态编辑
-CREATE TABLE IF NOT EXISTS mcp_config (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  payload TEXT NOT NULL DEFAULT '{}',
-  updated_at INTEGER NOT NULL DEFAULT 0
-);
 -- 导入暂存：与正式表镜像；导入过程中只写这里，commit 在单事务内整体替换
 CREATE TABLE IF NOT EXISTS staging_sessions (
   id TEXT PRIMARY KEY,
@@ -98,18 +93,20 @@ CREATE TABLE IF NOT EXISTS staging_files (
   id TEXT PRIMARY KEY,
   content BLOB NOT NULL
 );
--- 消息全文索引（用户提问 + 回答正文/思考），随写入维护；暂无消费端点，为消息级搜索预留
-CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-  text,
-  session_id UNINDEXED,
-  message_id UNINDEXED
+-- 消息级搜索索引（普通表）：存用户提问 + 回答正文/思考的纯文本，供 LIKE 子串匹配。
+-- 搜索用前导通配符（%词%）无法走索引，本地数据量下全扫毫秒级；普通表比 fts5 少一层维护开销。
+CREATE TABLE IF NOT EXISTS messages_search (
+  session_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  text TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS messages_search_session ON messages_search(session_id);
 """
 
 
 # 当前 schema 版本：新增表/列时 +1，并在 _migrate 里写幂等 ALTER。
 # 历史库没有 user_version（默认 0），首次启动时直接置为当前版本。
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def configure(data_dir: Path) -> None:
@@ -127,15 +124,26 @@ def configure(data_dir: Path) -> None:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    """按 user_version 做幂等迁移；v2 新增 mcp_config 表（由 executescript 建表，只需升版本）。"""
+    """按 user_version 做幂等迁移。
+
+    v3：消息搜索索引从 fts5 虚拟表（messages_fts）降级为普通表（messages_search）。
+    旧的 fts5 表由 executescript 之外的 DROP 移除，并从 messages 回填纯文本，保证迁移后
+    历史消息仍可被搜索（否则要等下次保存才重建索引）。
+    """
     current = conn.execute('PRAGMA user_version').fetchone()[0]
     if current >= SCHEMA_VERSION:
         return
-    # 示例（未来加列时取消注释，保持幂等）：
-    # if current < 2:
-    #     columns = {row[1] for row in conn.execute('PRAGMA table_info(sessions)')}
-    #     if 'new_col' not in columns:
-    #         conn.execute('ALTER TABLE sessions ADD COLUMN new_col TEXT NOT NULL DEFAULT ""')
+    if current < 3:
+        from .search_index import message_text  # 延迟导入，避免与 core 形成环
+
+        conn.execute('DROP TABLE IF EXISTS messages_fts')
+        for row in conn.execute('SELECT session_id, id, payload FROM messages').fetchall():
+            text = message_text(json.loads(row['payload']))
+            if text:
+                conn.execute(
+                    'INSERT INTO messages_search(session_id, message_id, text) VALUES(?,?,?)',
+                    (row['session_id'], row['id'], text),
+                )
     conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
 
 

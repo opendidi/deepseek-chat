@@ -56,17 +56,17 @@ class _StreamCtx:
 
 
 class _FakeAsyncClient:
-    """记录最后一次请求；可注入上游响应或网络异常。"""
+    """记录最后一次请求；可注入上游响应或网络异常。共享 client 由 deepseek 惰性创建并复用。"""
 
     last: dict = {}
     response: _FakeResponse | None = None
     error: Exception | None = None
     stream_error: Exception | None = None
-    timeout: object | None = None
+    timeout: object | None = None  # 最近一次请求传入的 per-request timeout
+    instances: int = 0  # 新建实例次数，用于验证共享 client 复用
 
     def __init__(self, *args, **kwargs):
-        # 记录 timeout，用于验证 SSE 与 API 端点确实使用不同的超时配置
-        _FakeAsyncClient.timeout = kwargs.get('timeout')
+        _FakeAsyncClient.instances += 1
 
     async def __aenter__(self):
         return self
@@ -74,13 +74,17 @@ class _FakeAsyncClient:
     async def __aexit__(self, *args):
         return None
 
-    async def get(self, url, headers=None):
+    async def aclose(self):
+        return None
+
+    async def get(self, url, headers=None, timeout=None):
         _FakeAsyncClient.last = {'method': 'GET', 'url': url, 'headers': headers or {}}
+        _FakeAsyncClient.timeout = timeout
         if _FakeAsyncClient.error:
             raise _FakeAsyncClient.error
         return _FakeAsyncClient.response or _FakeResponse(b'{"data":[{"id":"deepseek-flash"}]}')
 
-    async def post(self, url, headers=None, data=None, files=None, content=None):
+    async def post(self, url, headers=None, data=None, files=None, content=None, timeout=None):
         _FakeAsyncClient.last = {
             'method': 'POST',
             'url': url,
@@ -89,17 +93,19 @@ class _FakeAsyncClient:
             'files': files,
             'content': content,
         }
+        _FakeAsyncClient.timeout = timeout
         if _FakeAsyncClient.error:
             raise _FakeAsyncClient.error
         return _FakeAsyncClient.response or _FakeResponse(b'{"id":"file-1"}')
 
-    def stream(self, method, url, headers=None, content=None):
+    def stream(self, method, url, headers=None, content=None, timeout=None):
         _FakeAsyncClient.last = {
             'method': method,
             'url': url,
             'headers': headers or {},
             'content': content,
         }
+        _FakeAsyncClient.timeout = timeout
         if _FakeAsyncClient.error:
             raise _FakeAsyncClient.error
         response = _FakeAsyncClient.response or _FakeResponse(
@@ -115,11 +121,14 @@ def _reset(monkeypatch):
     monkeypatch.setattr(deepseek, 'DEEPSEEK_API_KEY', 'sk-test-secret')
     monkeypatch.setattr(deepseek, 'DEEPSEEK_BASE_URL', 'https://api.example.test')
     monkeypatch.setattr(deepseek.httpx, 'AsyncClient', _FakeAsyncClient)
+    # 每个用例重新惰性创建共享 client，避免跨用例复用上一次的实例
+    monkeypatch.setattr(deepseek, '_client', None)
     _FakeAsyncClient.last = {}
     _FakeAsyncClient.response = None
     _FakeAsyncClient.error = None
     _FakeAsyncClient.stream_error = None
     _FakeAsyncClient.timeout = None
+    _FakeAsyncClient.instances = 0
 
 
 def test_models_injects_server_key(client):
@@ -291,6 +300,15 @@ def test_sse_and_api_use_different_timeouts(client):
     api_timeout = _FakeAsyncClient.timeout
     assert sse_timeout is not None and api_timeout is not None
     assert sse_timeout.read > api_timeout.read
+
+
+def test_shared_client_reused(client):
+    """多次请求复用同一个 AsyncClient 实例（连接池复用，不再每请求新建）"""
+    _FakeAsyncClient.instances = 0
+    deepseek._client = None
+    client.get('/api/deepseek/models')
+    client.get('/api/deepseek/models')
+    assert _FakeAsyncClient.instances == 1
 
 
 def test_upstream_error_message_is_truncated(client):

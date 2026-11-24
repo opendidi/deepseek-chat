@@ -1,7 +1,7 @@
-"""消息全文检索：在 FTS 索引表上做子串匹配（CJK 友好），返回带上下文摘录的命中。
+"""消息全文检索：在搜索索引表上做子串匹配（CJK 友好），返回带上下文摘录的命中。
 
-FTS5 默认分词器不切中文词，MATCH 语法对短查询也不友好；
-这里的索引表本身是普通表，直接 LIKE + ESCAPE 捕获任意子串，本机数据量下全扫毫秒级。
+索引表 messages_search 是普通表，直接 LIKE + ESCAPE 捕获任意子串（前导通配符走不了索引），
+本机数据量下全扫毫秒级。
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def search_messages(query: str, limit: int = 30) -> list[dict]:
     conn = connect()
     try:
         rows = conn.execute(
-            "SELECT session_id, message_id, text FROM messages_fts "
+            "SELECT session_id, message_id, text FROM messages_search "
             "WHERE text LIKE '%' || ? || '%' ESCAPE '\\' "
             "ORDER BY length(text) LIMIT ?",
             (escaped, max(1, min(limit, 100))),

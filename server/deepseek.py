@@ -31,6 +31,26 @@ API_TIMEOUT = httpx.Timeout(connect=10.0, read=45.0, write=60.0, pool=10.0)
 # 回显给浏览器的上游文案上限，避免超长内容或内部路径直接暴露
 MAX_ERROR_MESSAGE = 500
 
+# 共享 AsyncClient：连接池复用，避免每条消息/附件都重新做 TCP + TLS 握手。
+# 惰性创建（首次请求时）；timeout 改为 per-request 传入（httpx 允许覆盖默认超时），
+# 因此 SSE 长连接与普通 API 端点仍可用不同的超时配置。
+_client: httpx.AsyncClient | None = None
+
+
+def get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient()
+    return _client
+
+
+async def close_client() -> None:
+    """服务关闭时释放连接池（lifespan finally 调用）。"""
+    global _client
+    if _client is not None:
+        await _client.aclose()
+        _client = None
+
 
 class DeepSeekError(Exception):
     """模型代理错误：code 供前端分类，message 为可展示的说明。"""
@@ -64,15 +84,17 @@ def auth_headers(key: str, **extra: str) -> dict[str, str]:
 
 
 async def _get(path: str, headers: dict[str, str]) -> bytes:
-    async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
-        response = await client.get(f'{DEEPSEEK_BASE_URL}{path}', headers=headers)
+    response = await get_client().get(
+        f'{DEEPSEEK_BASE_URL}{path}', headers=headers, timeout=API_TIMEOUT
+    )
     _raise_for_upstream(response)
     return response.content
 
 
 async def _post(path: str, headers: dict[str, str], **kwargs) -> bytes:
-    async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
-        response = await client.post(f'{DEEPSEEK_BASE_URL}{path}', headers=headers, **kwargs)
+    response = await get_client().post(
+        f'{DEEPSEEK_BASE_URL}{path}', headers=headers, timeout=API_TIMEOUT, **kwargs
+    )
     _raise_for_upstream(response)
     return response.content
 
@@ -115,27 +137,27 @@ async def stream_messages(body: bytes, key: str) -> AsyncIterator[bytes]:
                 'anthropic-beta': 'files-api-2025-04-14',
             }
         )
-        async with httpx.AsyncClient(timeout=SSE_TIMEOUT) as client:
-            async with client.stream(
-                'POST',
-                f'{DEEPSEEK_BASE_URL}/anthropic/v1/messages',
-                headers=headers,
-                content=body,
-            ) as response:
-                if response.status_code >= 400:
-                    detail = await response.aread()
-                    error = _upstream_error(response.status_code, detail)
-                    yield _sse_error(error)
-                    return
-                try:
-                    async for chunk in response.aiter_bytes():
-                        yield chunk
-                except (httpx.HTTPError, OSError) as error:
-                    yield _sse_error(
-                        DeepSeekError(
-                            UPSTREAM_UNREACHABLE, _network_message(error), 502
-                        )
+        async with get_client().stream(
+            'POST',
+            f'{DEEPSEEK_BASE_URL}/anthropic/v1/messages',
+            headers=headers,
+            content=body,
+            timeout=SSE_TIMEOUT,
+        ) as response:
+            if response.status_code >= 400:
+                detail = await response.aread()
+                error = _upstream_error(response.status_code, detail)
+                yield _sse_error(error)
+                return
+            try:
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+            except (httpx.HTTPError, OSError) as error:
+                yield _sse_error(
+                    DeepSeekError(
+                        UPSTREAM_UNREACHABLE, _network_message(error), 502
                     )
+                )
     except (httpx.HTTPError, OSError) as error:
         yield _sse_error(DeepSeekError(UPSTREAM_UNREACHABLE, _network_message(error), 502))
 

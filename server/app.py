@@ -27,6 +27,7 @@ from .config import (
     DEEPSEEK_KEY_SOURCE,
     DIST_DIR,
 )
+from .deepseek import close_client
 from .mcp_client import manager as mcp_manager, migrate_legacy_config
 from .routers import ROUTERS
 from .rateLimit import DeepSeekRateLimitMiddleware
@@ -43,8 +44,9 @@ async def _lifespan(_app: FastAPI):
     try:
         yield
     finally:
-        # 退出时终止所有 MCP 子进程，避免留下孤儿进程
+        # 退出时终止所有 MCP 子进程、释放共享代理连接池，避免留下孤儿进程/连接
         await mcp_manager.close_all()
+        await close_client()
 
 
 app = FastAPI(title='deepseek-chat', lifespan=_lifespan, docs_url=None, redoc_url=None, openapi_url=None)

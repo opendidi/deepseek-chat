@@ -10,7 +10,7 @@ import json
 import sqlite3
 
 from .core import SessionExistsError, connect, write_lock
-from .fts import sync_fts
+from .search_index import sync_search_index
 from .sessions import insert_message_rows, insert_session_row, summary_from_row
 
 STAGING_TABLES = ('staging_sessions', 'staging_messages', 'staging_refs', 'staging_files')
@@ -102,7 +102,7 @@ def import_commit() -> list[dict]:
     try:
         with write_lock, conn:
             summaries: list[dict] = []
-            conn.execute('DELETE FROM messages_fts')
+            conn.execute('DELETE FROM messages_search')
             conn.execute('DELETE FROM message_files')
             conn.execute('DELETE FROM messages')
             conn.execute('DELETE FROM sessions')
@@ -156,7 +156,7 @@ def import_commit() -> list[dict]:
                         (summary['id'],),
                     )
                 ]
-                sync_fts(conn, summary['id'], messages)
+                sync_search_index(conn, summary['id'], messages)
             for table in STAGING_TABLES:
                 conn.execute(f'DELETE FROM {table}')
             return summaries

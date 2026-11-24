@@ -9,6 +9,9 @@
 
 from __future__ import annotations
 
+import json
+import sqlite3
+
 import pytest
 
 from server import storage
@@ -201,22 +204,79 @@ def test_import_duplicate_session_rejected(db):
         db.import_add_session(session('dup', [user('u1')]))
 
 
-def test_fts_maintenance(db):
-    """消息全文索引随保存/删除/替换维护（暂无消费端点，为消息级搜索预留）"""
-    import sqlite3
+def test_search_index_is_plain_table(db):
+    """消息搜索索引是普通表（LIKE 子串匹配），不是 fts5 虚拟表"""
+    conn = sqlite3.connect(core._db_path)
+    try:
+        row = conn.execute("SELECT type FROM sqlite_master WHERE name='messages_search'").fetchone()
+        assert row is not None and row[0] == 'table'
+        # 旧 fts5 表已退役
+        assert (
+            conn.execute("SELECT count(*) FROM sqlite_master WHERE name='messages_fts'").fetchone()[0]
+            == 0
+        )
+    finally:
+        conn.close()
 
+
+def test_search_index_maintenance(db):
+    """消息搜索索引随保存/删除维护；删除会话时级联清理其索引行"""
     db.save_session(session('s1', [user('u1', content='查找这段'), reply('a1', text='答案正文')]))
     db.save_session(session('s2', [user('u1', content='另一段')]))
     conn = sqlite3.connect(core._db_path)
     try:
-        assert conn.execute('SELECT count(*) FROM messages_fts').fetchone()[0] == 3
+        assert conn.execute('SELECT count(*) FROM messages_search').fetchone()[0] == 3
     finally:
         conn.close()
     db.delete_session('s1')
     conn = sqlite3.connect(core._db_path)
     try:
-        remaining = conn.execute('SELECT session_id FROM messages_fts').fetchall()
+        remaining = conn.execute('SELECT session_id FROM messages_search').fetchall()
         assert {row[0] for row in remaining} == {'s2'}
+    finally:
+        conn.close()
+
+
+def test_search_messages_returns_hits(db):
+    """消息级搜索命中用户提问与回答正文，返回带上下文摘录的结果"""
+    db.save_session(session('s1', [user('u1', content='如何部署到服务器'), reply('a1', text='用 systemd + nginx')]))
+    hits = db.search_messages('部署')
+    assert [hit['sessionId'] for hit in hits] == ['s1']
+    assert '部署' in hits[0]['snippet']
+
+
+def test_migration_v2_drops_fts_and_backfills(tmp_path):
+    """旧库（v2，含 fts5 messages_fts）启动迁移后：fts 表删除，普通索引表建好并回填历史"""
+    db_path = tmp_path / 'chats.db'
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        'CREATE TABLE messages ('
+        'session_id TEXT NOT NULL, id TEXT NOT NULL, seq INTEGER NOT NULL, '
+        'role TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT 0, '
+        'parent_id TEXT, payload TEXT NOT NULL, PRIMARY KEY (session_id, id))'
+    )
+    conn.execute(
+        'CREATE VIRTUAL TABLE messages_fts USING fts5(text, session_id UNINDEXED, message_id UNINDEXED)'
+    )
+    conn.execute(
+        "INSERT INTO messages(session_id, id, seq, role, created_at, payload) "
+        "VALUES('s1', 'u1', 0, 'user', 1, ?)",
+        (json.dumps({'id': 'u1', 'role': 'user', 'content': '旧内容'}),),
+    )
+    conn.execute('PRAGMA user_version = 2')
+    conn.commit()
+    conn.close()
+
+    storage.configure(tmp_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        assert (
+            conn.execute("SELECT count(*) FROM sqlite_master WHERE name='messages_fts'").fetchone()[0]
+            == 0
+        )
+        assert conn.execute("SELECT text FROM messages_search WHERE message_id='u1'").fetchone()[0] == '旧内容'
+        assert conn.execute('PRAGMA user_version').fetchone()[0] == core.SCHEMA_VERSION
     finally:
         conn.close()
 
@@ -226,3 +286,48 @@ def test_missing_reads(db):
     assert db.load_session('nope') is None
     assert db.load_file('nope') is None
     assert db.list_summaries() == []
+
+
+def test_append_does_not_rewrite_unchanged_rows(db):
+    """增量保存：追加消息时，未变更的消息行保留原 rowid（即未 delete + 重插）。
+
+    s1 之后再加一个会话把 rowid 水位抬高：否则整会话重写删空本会话后 rowid 会被复用，
+    恰好掩盖掉「delete + 重插」的行为。
+    """
+    db.save_session(session('other', [user('ox'), reply('oy')]))
+    db.save_session(session('s1', [user('u1'), reply('a1')]))
+    db.save_session(session('other2', [user('zx'), reply('zy')]))
+    conn = sqlite3.connect(core._db_path)
+    try:
+        before = dict(conn.execute('SELECT id, rowid FROM messages WHERE session_id=?', ('s1',)))
+    finally:
+        conn.close()
+
+    db.save_session(session('s1', [user('u1'), reply('a1'), user('u2', content='第二个问题'), reply('a2')]))
+
+    conn = sqlite3.connect(core._db_path)
+    try:
+        after = dict(conn.execute('SELECT id, rowid FROM messages WHERE session_id=?', ('s1',)))
+    finally:
+        conn.close()
+    assert after['u1'] == before['u1']
+    assert after['a1'] == before['a1']
+    assert {'u1', 'a1', 'u2', 'a2'} <= after.keys()
+
+
+def test_edit_and_delete_messages(db):
+    """增量保存：编辑消息内容、删除中间消息后读回一致"""
+    db.save_session(session('s1', [user('u1', content='v1'), reply('a1', text='t1'), reply('a2', text='t2')]))
+    # 编辑 u1 内容、删除 a1
+    edited = session('s1', [user('u1', content='v2'), reply('a2', text='t2')])
+    db.save_session(edited)
+    assert db.load_session('s1') == edited
+
+
+def test_reorder_updates_seq(db):
+    """增量保存：消息重排后按 seq 读回新顺序（seq 列随位置更新）"""
+    db.save_session(session('s1', [user('u1'), reply('a1'), user('u2')]))
+    reordered = session('s1', [user('u1'), user('u2'), reply('a1')])
+    db.save_session(reordered)
+    loaded = db.load_session('s1')
+    assert [message['id'] for message in loaded['messages']] == ['u1', 'u2', 'a1']

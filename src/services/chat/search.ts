@@ -1,4 +1,4 @@
-/** 会话内容搜索：走服务端维护的 FTS 索引，返回消息级命中（含定位与摘录） */
+/** 会话内容搜索：走服务端维护的搜索索引，返回消息级命中（含定位与摘录） */
 import { searchMessages, type SearchHit } from './db.js'
 
 export type { SearchHit }

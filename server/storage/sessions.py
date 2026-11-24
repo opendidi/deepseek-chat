@@ -11,7 +11,7 @@ import json
 import sqlite3
 
 from .core import connect, write_lock
-from .fts import sync_fts
+from .search_index import apply_search_diff
 
 
 def summary_from_row(row: sqlite3.Row) -> dict:
@@ -71,6 +71,20 @@ def insert_session_row(conn: sqlite3.Connection, table: str, session: dict, upse
         )
 
 
+def _file_mimes_and_refs(session_id: str, messages: list[dict]) -> tuple[dict[str, str], list[tuple[str, str]]]:
+    """从消息 payload 提取 file_id → mimeType 与 (session_id, file_id) 引用列表。"""
+    file_mimes: dict[str, str] = {}
+    refs: list[tuple[str, str]] = []
+    for message in messages:
+        if message.get('role') != 'user':
+            continue
+        for file in message.get('files') or []:
+            refs.append((session_id, file['id']))
+            if file.get('mimeType') and file['id'] not in file_mimes:
+                file_mimes[file['id']] = file['mimeType']
+    return file_mimes, refs
+
+
 def insert_message_rows(conn: sqlite3.Connection, table: str, session: dict) -> dict[str, str]:
     """写入消息行与附件引用行，返回 file_id → mimeType（来自消息 payload）。
 
@@ -78,8 +92,6 @@ def insert_message_rows(conn: sqlite3.Connection, table: str, session: dict) -> 
     """
     session_id = session['id']
     messages = session.get('messages') or []
-    file_mimes: dict[str, str] = {}
-    refs: list[tuple[str, str]] = []
     for seq, message in enumerate(messages):
         conn.execute(
             f'INSERT INTO {table}(session_id, id, seq, role, created_at, parent_id, payload) '
@@ -94,11 +106,7 @@ def insert_message_rows(conn: sqlite3.Connection, table: str, session: dict) -> 
                 json.dumps(message),
             ),
         )
-        if message.get('role') == 'user':
-            for file in message.get('files') or []:
-                refs.append((session_id, file['id']))
-                if file.get('mimeType') and file['id'] not in file_mimes:
-                    file_mimes[file['id']] = file['mimeType']
+    file_mimes, refs = _file_mimes_and_refs(session_id, messages)
     ref_table = 'message_files' if table == 'messages' else 'staging_refs'
     conn.execute(f'DELETE FROM {ref_table} WHERE session_id=?', (session_id,))
     conn.executemany(f'INSERT INTO {ref_table}(session_id, file_id) VALUES(?,?)', refs)
@@ -110,14 +118,53 @@ def save_session(session: dict, files: list[tuple[str, bytes, str]] = ()) -> Non
 
     files 为 (file_id, 原件字节, 声明 MIME) 列表；MIME 以消息 payload 里的 mimeType 为准，
     payload 缺失时回退到上传声明的类型（导入场景 payload 会在 file-types 步骤补齐）。
+
+    消息做增量写入：与库中 (seq, payload) 逐条对比，只写新增/变更、删除消失的行，
+    追加消息时不必整会话重写；附件引用行很小，仍全量重建最稳。
     """
     session_id = session['id']
     conn = connect()
     try:
         with write_lock, conn:
             insert_session_row(conn, 'sessions', session, upsert=True)
-            conn.execute('DELETE FROM messages WHERE session_id=?', (session_id,))
-            file_mimes = insert_message_rows(conn, 'messages', session)
+            messages = session.get('messages') or []
+            existing = {
+                row['id']: (row['seq'], row['payload'])
+                for row in conn.execute(
+                    'SELECT id, seq, payload FROM messages WHERE session_id=?', (session_id,)
+                )
+            }
+            incoming_ids: set[str] = set()
+            changed: list[dict] = []
+            for seq, message in enumerate(messages):
+                incoming_ids.add(message['id'])
+                payload = json.dumps(message)
+                if existing.get(message['id']) == (seq, payload):
+                    continue  # 未变更
+                changed.append(message)
+                conn.execute(
+                    'INSERT INTO messages(session_id, id, seq, role, created_at, parent_id, payload) '
+                    'VALUES(?,?,?,?,?,?,?) ON CONFLICT(session_id, id) DO UPDATE SET '
+                    'seq=excluded.seq, role=excluded.role, created_at=excluded.created_at, '
+                    'parent_id=excluded.parent_id, payload=excluded.payload',
+                    (
+                        session_id,
+                        message['id'],
+                        seq,
+                        message['role'],
+                        message.get('createdAt') or 0,
+                        message.get('parentId'),
+                        payload,
+                    ),
+                )
+            removed_ids = [message_id for message_id in existing if message_id not in incoming_ids]
+            for message_id in removed_ids:
+                conn.execute(
+                    'DELETE FROM messages WHERE session_id=? AND id=?', (session_id, message_id)
+                )
+            file_mimes, refs = _file_mimes_and_refs(session_id, messages)
+            conn.execute('DELETE FROM message_files WHERE session_id=?', (session_id,))
+            conn.executemany('INSERT INTO message_files(session_id, file_id) VALUES(?,?)', refs)
             for file_id, content, content_type in files:
                 mime = file_mimes.get(file_id) or content_type or ''
                 conn.execute(
@@ -125,7 +172,7 @@ def save_session(session: dict, files: list[tuple[str, bytes, str]] = ()) -> Non
                     'ON CONFLICT(id) DO UPDATE SET mime=excluded.mime, size=excluded.size, content=excluded.content',
                     (file_id, mime, len(content), sqlite3.Binary(content)),
                 )
-            sync_fts(conn, session_id, session.get('messages') or [])
+            apply_search_diff(conn, session_id, changed, removed_ids)
     finally:
         conn.close()
 
@@ -150,7 +197,10 @@ def load_session(session_id: str) -> dict | None:
 def list_summaries() -> list[dict]:
     conn = connect()
     try:
-        rows = conn.execute('SELECT * FROM sessions').fetchall()
+        # 只取摘要用到的列，避免把 meta（可能较大的 JSON）一并读进内存
+        rows = conn.execute(
+            'SELECT id, title, created_at, updated_at, pinned FROM sessions'
+        ).fetchall()
         return [summary_from_row(row) for row in rows]
     finally:
         conn.close()
@@ -160,7 +210,7 @@ def delete_session(session_id: str) -> None:
     conn = connect()
     try:
         with write_lock, conn:
-            conn.execute('DELETE FROM messages_fts WHERE session_id=?', (session_id,))
+            conn.execute('DELETE FROM messages_search WHERE session_id=?', (session_id,))
             conn.execute('DELETE FROM message_files WHERE session_id=?', (session_id,))
             conn.execute('DELETE FROM messages WHERE session_id=?', (session_id,))
             conn.execute('DELETE FROM favorites WHERE session_id=?', (session_id,))

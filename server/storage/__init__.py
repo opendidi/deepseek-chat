@@ -6,7 +6,7 @@
 - import_commit：导入暂存在单事务内整体替换正式数据，失败整体回滚，返回新摘要列表。
 
 按领域拆分：core（连接与 schema）、sessions（会话）、files（附件原件）、
-favorites（收藏）、staging（导入暂存）、fts（消息全文索引维护）。
+favorites（收藏）、staging（导入暂存）、search_index（消息搜索索引维护）。
 """
 
 from .core import SessionExistsError, configure

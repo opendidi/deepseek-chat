@@ -72,7 +72,7 @@ export type SearchHit = {
   snippet: string
 }
 
-/** 消息级全文检索（服务端维护的 FTS 索引，LIKE 子串匹配，CJK 友好） */
+/** 消息级全文检索（服务端维护的搜索索引，LIKE 子串匹配，CJK 友好） */
 export const searchMessages = async (query: string): Promise<SearchHit[]> =>
   requestJson<SearchHit[]>(`/search?q=${encodeURIComponent(query)}`, {
     signal: AbortSignal.timeout(GET_TIMEOUT),
