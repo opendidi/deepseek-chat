@@ -1,4 +1,5 @@
 import { runClientTool } from '../agent/tools.js'
+import { callMcpTool, isMcpTool } from '../mcp.js'
 import type { ToolStep } from './types.js'
 import { readToolInput } from './reply.js'
 
@@ -18,7 +19,9 @@ export const runToolSteps = async (
       const parsed = readToolInput(step.inputJson)
       const outcome = parsed.error
         ? { content: parsed.error, isError: true }
-        : await runClientTool(step.name, parsed.input, signal, allowedNames)
+        : isMcpTool(step.name)
+          ? await callMcpTool(step.name, parsed.input, signal)
+          : await runClientTool(step.name, parsed.input, signal, allowedNames)
       return {
         id: step.id,
         content: outcome.content,

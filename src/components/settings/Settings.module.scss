@@ -568,3 +568,122 @@
     max-width: 100%;
   }
 }
+
+
+.mcpRefresh {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-brand-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.mcpError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.mcpWarning {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 8px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.mcpSaved {
+  color: var(--dsw-alias-brand-text);
+}
+
+.mcpServer {
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+}
+
+.mcpServerHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+
+  .textInput {
+    flex: 1 1 140px;
+  }
+}
+
+.mcpRemove {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-state-error-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.mcpTypeRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+}
+
+.mcpTextarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background-color: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  resize: vertical;
+}
+
+.mcpTimeout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+
+  .numberInput {
+    width: 72px;
+  }
+}
+
+.mcpActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}

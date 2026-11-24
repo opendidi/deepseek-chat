@@ -13,6 +13,7 @@ import {
   stepSignature,
 } from '../agent/toolPolicy.js'
 import { runToolSteps } from './agentLoop.js'
+import { fetchMcpTools } from '../mcp.js'
 import { compressMessages } from './compress.js'
 import * as db from './db.js'
 import { createLatestReminder } from './latestReminder.js'
@@ -327,11 +328,20 @@ export const streamReply = async (
         )
         const system = [systemPromptFor(settings.locale), persona, summary].filter(Boolean).join('\n\n')
         let requestMessages = messages
+        // MCP 工具由服务端数据库配置控制（默认关闭）；拉取失败时按无 MCP 工具处理，
+        // 不影响本轮对话。仅在非 chat 模式拉取，避免纯聊天请求多一次 HTTP 往返。
+        const mcpResult =
+          settings.chatMode === 'chat'
+            ? { tools: [], error: null }
+            : await fetchMcpTools(controller.signal)
+        const mcpTools = mcpResult.tools
         const policy = resolveChatTools({
           mode: settings.chatMode,
           search: settings.search,
           agentTools: settings.agentTools,
           enabledTools: new Set(settings.enabledToolNames),
+          mcpTools,
+          mcpDisabledTools: settings.mcpDisabledTools,
           locale: settings.locale,
         })
         const tools = policy.tools

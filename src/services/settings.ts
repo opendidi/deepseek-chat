@@ -78,6 +78,8 @@ type Settings = {
   chatMode: ChatMode
   /** 按工具粒度开启的客户端工具名；需要授权的页面工具默认关闭 */
   enabledToolNames: string[]
+  /** 被禁用的 MCP 工具名（mcp__ 前缀）；空数组表示全部启用 */
+  mcpDisabledTools: string[]
   /** 用量统计里服务端搜索/抓取是否按官方新规则免费 */
   usageFreeServerTools: boolean
   /** 今日预估费用达到该金额时提醒一次（¥）；0 表示关闭 */
@@ -110,6 +112,7 @@ const KEYS = {
   agentTools: 'deepseek-chat:agent-tools',
   chatMode: 'deepseek-chat:chat-mode',
   enabledToolNames: 'deepseek-chat:enabled-tool-names',
+  mcpDisabledTools: 'deepseek-chat:mcp-disabled-tools',
   /** 用户显式关闭过的地图工具：服务器配置了 Key 也不再自动开启 */
   amapOptOut: 'deepseek-chat:amap-optout',
   usageFreeServerTools: 'deepseek-chat:usage-free-server-tools',
@@ -240,6 +243,21 @@ const initialReasoningEffort = (): ReasoningEffort => {
     : 'high'
 }
 
+const initialMcpDisabledTools = (): string[] => {
+  const raw = read(KEYS.mcpDisabledTools)
+  if (!raw) {
+    return []
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((name): name is string => typeof name === 'string' && name.startsWith('mcp__'))
+      : []
+  } catch {
+    return []
+  }
+}
+
 const initialChatMode = (): ChatMode => {
   const saved = read(KEYS.chatMode)
   return saved === 'chat' || saved === 'full' ? saved : 'standard'
@@ -292,6 +310,7 @@ export const useSettings = create<Settings>(() => ({
   agentTools: initialFlag(KEYS.agentTools, false),
   chatMode: initialChatMode(),
   enabledToolNames: initialEnabledTools(),
+  mcpDisabledTools: initialMcpDisabledTools(),
   usageFreeServerTools: initialFlag(KEYS.usageFreeServerTools, true),
   usageDailyQuota: Math.max(0, Number(read(KEYS.usageDailyQuota)) || 0),
   systemPrompt: initialSystemPrompt(),
@@ -448,6 +467,18 @@ export const setEnabledToolNames = (enabledToolNames: string[]) => {
   const names = ALL_TOOL_NAMES.filter((name) => enabledToolNames.includes(name))
   write(KEYS.enabledToolNames, JSON.stringify(names))
   useSettings.setState({ enabledToolNames: names })
+}
+
+export const setMcpDisabledTools = (mcpDisabledTools: string[]) => {
+  const names = [...new Set(mcpDisabledTools.filter((name) => name.startsWith('mcp__')))]
+  write(KEYS.mcpDisabledTools, JSON.stringify(names))
+  useSettings.setState({ mcpDisabledTools: names })
+}
+
+export const toggleMcpTool = (name: string, enabled: boolean) => {
+  const current = useSettings.getState().mcpDisabledTools
+  const next = enabled ? current.filter((item) => item !== name) : [...new Set([...current, name])]
+  setMcpDisabledTools(next)
 }
 
 /** 按工具粒度开关；顺序始终与注册表一致 */

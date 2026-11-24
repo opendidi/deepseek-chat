@@ -53,6 +53,7 @@ pnpm dev                      # 终端 2：前端开发服务器（http://localh
 - 设置 → 模型 → 启用 Agent 工具后，模型可调用浏览器端工具，并自动完成「调用 → 本地执行 → 回传结果」的多轮循环（最多 6 轮，可随时停止）。
 - 内置 `get_current_time`、`calculate`（不使用 `eval`）、`get_page_context`；工具调用步骤与结果在回答中展示。
 - **高德地图工具**：在后端 `.env` 中配置 `AMAP_KEY`（高德开放平台「Web 服务」类型）后，Agent 可调用地点搜索（`amap_place_search`）、地理编码（`amap_geocode`）、实时天气（`amap_weather`）与路线规划（`amap_route_planning`）。Key 保存在服务器上，浏览器不接触；工具默认关闭，需按工具粒度开启。
+- **MCP 工具（默认关闭）**：在**设置 → MCP** 中直接配置，配置与会话数据一起保存在本机 `data/chats.db`（SQLite），部署时不需额外文件。启用后其工具会自动加入模型请求。工具在**服务端**执行（stdio 子进程或 Streamable HTTP + JSON-RPC），浏览器只传参数；零新增 Python 依赖，不改动已有的浏览器端工具系统。可在设置里增删改服务器（stdio 命令 / 远程 HTTP 端点、参数、环境变量、请求头、超时），保存后自动热重载，无需手动编辑文件或重启服务；MCP 工具还能按工具粒度启停。
 - 关闭时请求不声明客户端工具，保持普通单次对话。
 
 ### 输入、阅读与界面
@@ -70,7 +71,7 @@ pnpm dev                      # 终端 2：前端开发服务器（http://localh
 
 ## 数据与存储
 
-设置保存在浏览器 localStorage；API Key 只存服务端 `.env`，浏览器不持有。会话、附件原件与收藏保存在本机 `data/chats.db`（SQLite 单文件，由 Python 后端读写），附件原件存在同一文件的 BLOB 列里。会话 id 会出现在地址栏 hash 中，但不包含任何对话内容。发送消息、上传附件、使用语音功能时，请求经服务端 `/api/deepseek/*` 代理转发，Key 只由服务端注入。
+设置保存在浏览器 localStorage；API Key 只存服务端 `.env`，浏览器不持有。MCP 工具由服务端 `data/chats.db` 中的配置控制，默认不启用；工具名带 `mcp__` 前缀，与内置工具隔离。会话、附件原件与收藏保存在本机 `data/chats.db`（SQLite 单文件，由 Python 后端读写），附件原件存在同一文件的 BLOB 列里。会话 id 会出现在地址栏 hash 中，但不包含任何对话内容。发送消息、上传附件、使用语音功能时，请求经服务端 `/api/deepseek/*` 代理转发，Key 只由服务端注入。
 
 存储后端在本地开发时监听 `127.0.0.1`，但生产单端口形态（`scripts/setup-board.sh`）会绑定 `0.0.0.0` 供局域网访问——务必在 `.env` 设置 `ACCESS_PASSWORD` 或前置鉴权代理。保存、删除与导入都在 SQLite 事务内完成，导入失败不会破坏现有数据。备份需复制 `data/chats.db` 和 `.env`（建议先停止后端再复制）。
 

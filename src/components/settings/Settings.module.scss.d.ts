@@ -19,6 +19,17 @@ declare const styles: {
   readonly label: string
   readonly locationCell: string
   readonly locationSelectors: string
+  readonly mcpActions: string
+  readonly mcpError: string
+  readonly mcpRefresh: string
+  readonly mcpRemove: string
+  readonly mcpSaved: string
+  readonly mcpServer: string
+  readonly mcpServerHead: string
+  readonly mcpTextarea: string
+  readonly mcpTimeout: string
+  readonly mcpTypeRow: string
+  readonly mcpWarning: string
   readonly modelBadge: string
   readonly navItem: string
   readonly navItemActive: string

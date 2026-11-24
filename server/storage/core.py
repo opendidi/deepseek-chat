@@ -58,6 +58,18 @@ CREATE TABLE IF NOT EXISTS favorites (
   text TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL DEFAULT 0
 );
+-- MCP 服务器配置：单行 JSON，与会话数据一起备份/迁移；设置页动态编辑
+CREATE TABLE IF NOT EXISTS mcp_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  payload TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+-- MCP 服务器配置：单行 JSON，与会话数据一起备份/迁移；设置页动态编辑
+CREATE TABLE IF NOT EXISTS mcp_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  payload TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
 -- 导入暂存：与正式表镜像；导入过程中只写这里，commit 在单事务内整体替换
 CREATE TABLE IF NOT EXISTS staging_sessions (
   id TEXT PRIMARY KEY,
@@ -97,7 +109,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
 
 # 当前 schema 版本：新增表/列时 +1，并在 _migrate 里写幂等 ALTER。
 # 历史库没有 user_version（默认 0），首次启动时直接置为当前版本。
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def configure(data_dir: Path) -> None:
@@ -115,7 +127,7 @@ def configure(data_dir: Path) -> None:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    """按 user_version 做幂等迁移；目前只有 v1（初始 schema），留入口供后续加列。"""
+    """按 user_version 做幂等迁移；v2 新增 mcp_config 表（由 executescript 建表，只需升版本）。"""
     current = conn.execute('PRAGMA user_version').fetchone()[0]
     if current >= SCHEMA_VERSION:
         return

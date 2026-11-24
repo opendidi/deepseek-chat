@@ -438,6 +438,14 @@ scp -r wheelhouse 用户名@板子IP:~/deepseek-chat/
   `.env` 权限应为 600，且**不要纳入版本控制或随归档外发**。模板见 [.env.example](.env.example)。
   解析器支持行尾 `# 注释` 与成对引号；`export ` 前缀仅 Python 侧识别，**systemd
   EnvironmentFile 不认，不要写**。
+- **MCP 工具（可选）**：配置保存在 `data/chats.db` 的 `mcp_config` 表（与会话同库，整机迁移时随文件一起走；应用内「导出会话」不含此项），
+  在设置 → MCP 里编辑即可，仅 `enabled: true` 的会被连接，不需额外配置文件。实现基于标准库 stdio + JSON-RPC，零新增依赖、不影响 ARM 部署。
+  工具在服务端子进程执行，能访问服务器文件系统——**只配置可信的 MCP 服务器**，
+  板子上按需限制其工作目录（如 `${REPO_ROOT}/data`）。应用退出时自动终止子进程。
+  配置在**设置 → MCP** 里编辑，保存后立即热重载；旧版项目根 mcp.json 会在首次启动时自动导入一次。
+  ⚠️ 该配置项等价于「在服务器上执行任意命令」：若 `ACCESS_PASSWORD` 未设置，
+  写接口只允许本机回环直连（带 X-Forwarded-For 的远程请求会被拒绝）；
+  公网部署请务必配置访问口令，否则不要开放设置页给不可信用户。
 - **限流（可选）**：公网/共享口令部署建议开 `DEEPSEEK_RATE_LIMIT_PER_MIN`（每 IP 每分钟）、
   `DEEPSEEK_DAILY_LIMIT`（每 IP 每日）；`DEEPSEEK_RATE_BURST` 不填时默认等于每分钟速率。
   三项全为 0（默认）即关闭。状态在进程内存，重启清零；仅适用于单 worker 形态。

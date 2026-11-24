@@ -44,6 +44,7 @@ import {
   setTopP,
   setTtsVoice,
   toggleToolName,
+  toggleMcpTool,
   useSettings,
   type ThemePreference,
 } from '../../services/settings.js'
@@ -58,6 +59,20 @@ import { openPromptLibrary } from '../chatInput/promptLibraryState.js'
 import { UsageStatsCell } from './UsageStats.js'
 import { modelDisplayName } from '../../services/models.js'
 import { TOOL_REGISTRY } from '../../services/agent/tools.js'
+import {
+  buildMcpConfig,
+  fetchMcpConfig,
+  fetchMcpStatus,
+  fetchMcpTools,
+  invalidateMcpTools,
+  reloadMcpConfig,
+  saveMcpConfig,
+  toServerDraft,
+  type McpServerConfig,
+  type McpServerDraft,
+  type McpStatus,
+  type McpToolParam,
+} from '../../services/mcp.js'
 import { downloadBlob } from '../../utils/download.js'
 import styles from './Settings.module.scss'
 
@@ -91,6 +106,7 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     label: 'settingDialogAsideStatsOptionLabel',
     icon: <IconChartOutline16 />,
   },
+  { value: 'mcp', label: 'settingsMcp', icon: <IconSettingsOutline16 /> },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
 
@@ -188,6 +204,8 @@ const SettingsContent = () => {
             <Suspense fallback={<div className={styles.usageEmpty}>{t('usageLoading')}</div>}>
               <UsagePanel />
             </Suspense>
+          ) : section === 'mcp' ? (
+            <McpSettings />
           ) : (
             <>
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
@@ -709,6 +727,302 @@ const AgentToolSettings = () => {
           ))}
         </div>
       ))}
+    </div>
+  )
+}
+
+const McpSettings = () => {
+  const t = useTranslate()
+  const disabled = useSettings((state) => state.mcpDisabledTools)
+  const [drafts, setDrafts] = useState<McpServerDraft[]>([])
+  const [canWrite, setCanWrite] = useState(true)
+  const [status, setStatus] = useState<McpStatus | null>(null)
+  const [tools, setTools] = useState<McpToolParam[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  const refreshTools = () => {
+    void Promise.all([fetchMcpStatus(), fetchMcpTools()]).then(([value, result]) => {
+      setStatus(value)
+      setTools(result.tools)
+      if (result.error) {
+        setError(result.error)
+      }
+    })
+  }
+
+  useEffect(() => {
+    let alive = true
+    void fetchMcpConfig()
+      .then((config) => {
+        if (!alive) {
+          return
+        }
+        setDrafts(Object.entries(config.servers ?? {}).map(([name, cfg]) => toServerDraft(name, cfg)))
+        setCanWrite(config.canWrite !== false)
+        if (config.reason === 'REMOTE_WRITE_BLOCKED') {
+          setError(t('settingsMcpWriteBlocked'))
+        }
+      })
+      .catch((cause: unknown) => {
+        if (alive) {
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
+      })
+    refreshTools()
+    return () => {
+      alive = false
+    }
+  }, [t])
+
+  const update = (key: string, patch: Partial<McpServerDraft>) => {
+    setDrafts((current) => current.map((item) => (item.key === key ? { ...item, ...patch } : item)))
+    setDirty(true)
+    setNotice(null)
+  }
+
+  const updateConfig = (key: string, patch: Partial<McpServerConfig>) => {
+    setDrafts((current) =>
+      current.map((item) =>
+        item.key === key ? { ...item, config: { ...item.config, ...patch } } : item
+      )
+    )
+    setDirty(true)
+    setNotice(null)
+  }
+
+  const save = () => {
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const config = buildMcpConfig(drafts)
+      void saveMcpConfig(config)
+        .then(() => {
+          setDirty(false)
+          setNotice(t('settingsMcpSaved'))
+          refreshTools()
+        })
+        .catch((cause: unknown) => {
+          setError(cause instanceof Error ? cause.message : String(cause))
+        })
+        .finally(() => setBusy(false))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+      setBusy(false)
+    }
+  }
+
+  const detail = !status
+    ? t('settingsMcpLoading')
+    : status.configured
+      ? `${t('settingsMcpEnabled')}：${status.servers.join('、')}`
+      : t('settingsMcpNone')
+
+  return (
+    <div className={styles.cell}>
+      <div className={styles.label}>
+        {t('settingsMcp')}
+        <button
+          type="button"
+          className={styles.mcpRefresh}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            void reloadMcpConfig()
+              .then((value) => {
+                setStatus(value)
+                invalidateMcpTools()
+                refreshTools()
+              })
+              .catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : String(cause))
+              })
+              .finally(() => setBusy(false))
+          }}
+        >
+          {busy ? t('settingsMcpReloading') : t('settingsMcpReload')}
+        </button>
+      </div>
+      <div className={styles.description}>
+        {t('settingsMcpDesc')}
+        <br />
+        {detail}
+        {error ? (
+          <>
+            <br />
+            <span className={styles.mcpError}>{t('settingsMcpError')}：{error}</span>
+          </>
+        ) : null}
+        {notice ? (
+          <>
+            <br />
+            <span className={styles.mcpSaved}>{notice}</span>
+          </>
+        ) : null}
+      </div>
+
+      {!canWrite ? (
+        <div className={styles.mcpWarning}>{t('settingsMcpWriteBlocked')}</div>
+      ) : null}
+
+      {drafts.map((draft) => {
+        const isHttp = Boolean(draft.config.url?.trim())
+        return (
+          <div key={draft.key} className={styles.mcpServer}>
+            <div className={styles.mcpServerHead}>
+              <input
+                className={styles.textInput}
+                aria-label={t('settingsMcpServerName')}
+                placeholder={t('settingsMcpServerName')}
+                value={draft.name}
+                onChange={(event) => update(draft.key, { name: event.target.value })}
+              />
+              <SettingSwitch
+                label={t('settingsMcpEnabled')}
+                checked={draft.config.enabled}
+                onChange={(value) => updateConfig(draft.key, { enabled: value })}
+              />
+              <button
+                type="button"
+                className={styles.mcpRemove}
+                aria-label={t('settingsMcpRemove')}
+                onClick={() => {
+                  setDrafts((current) => current.filter((item) => item.key !== draft.key))
+                  setDirty(true)
+                }}
+              >
+                {t('settingsMcpRemove')}
+              </button>
+            </div>
+            <div className={styles.mcpTypeRow}>
+              <label>
+                <input
+                  type="radio"
+                  checked={!isHttp}
+                  onChange={() =>
+                    updateConfig(draft.key, { url: undefined, command: draft.config.command ?? '' })
+                  }
+                />
+                {t('settingsMcpTypeStdio')}
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  checked={isHttp}
+                  onChange={() =>
+                    updateConfig(draft.key, { url: 'https://', command: undefined })
+                  }
+                />
+                {t('settingsMcpTypeHttp')}
+              </label>
+            </div>
+            {isHttp ? (
+              <>
+                <input
+                  className={styles.textInput}
+                  aria-label={t('settingsMcpUrl')}
+                  placeholder={t('settingsMcpUrl')}
+                  value={draft.config.url ?? ''}
+                  onChange={(event) => updateConfig(draft.key, { url: event.target.value })}
+                />
+                <textarea
+                  className={styles.mcpTextarea}
+                  aria-label={t('settingsMcpHeaders')}
+                  placeholder={`${t('settingsMcpHeaders')} (JSON)`}
+                  rows={2}
+                  value={draft.headersText}
+                  onChange={(event) => update(draft.key, { headersText: event.target.value })}
+                />
+              </>
+            ) : (
+              <>
+                <input
+                  className={styles.textInput}
+                  aria-label={t('settingsMcpCommand')}
+                  placeholder={t('settingsMcpCommand')}
+                  value={draft.config.command ?? ''}
+                  onChange={(event) => updateConfig(draft.key, { command: event.target.value })}
+                />
+                <textarea
+                  className={styles.mcpTextarea}
+                  aria-label={t('settingsMcpArgs')}
+                  placeholder={t('settingsMcpArgsHint')}
+                  rows={2}
+                  value={draft.argsText}
+                  onChange={(event) => update(draft.key, { argsText: event.target.value })}
+                />
+                <textarea
+                  className={styles.mcpTextarea}
+                  aria-label={t('settingsMcpEnv')}
+                  placeholder={`${t('settingsMcpEnv')} (JSON)`}
+                  rows={2}
+                  value={draft.envText}
+                  onChange={(event) => update(draft.key, { envText: event.target.value })}
+                />
+              </>
+            )}
+            <label className={styles.mcpTimeout}>
+              {t('settingsMcpTimeout')}
+              <input
+                className={styles.numberInput}
+                type="number"
+                min={1}
+                max={300}
+                value={draft.config.timeout ?? 30}
+                onChange={(event) =>
+                  updateConfig(draft.key, { timeout: Number(event.target.value) || 30 })
+                }
+              />
+            </label>
+          </div>
+        )
+      })}
+
+      <div className={styles.mcpActions}>
+        <Button
+          variant="outlined"
+          size="s"
+          onClick={() => {
+            setDrafts((current) => [
+              ...current,
+              toServerDraft(`server-${current.length + 1}`, {
+                enabled: false,
+                command: '',
+                args: [],
+                timeout: 30,
+              }),
+            ])
+            setDirty(true)
+          }}
+        >
+          {t('settingsMcpAdd')}
+        </Button>
+        <Button
+          variant="primary"
+          size="s"
+          disabled={!canWrite || busy || !dirty}
+          onClick={save}
+        >
+          {t('settingsMcpSave')}
+        </Button>
+      </div>
+
+      {tools.length > 0 ? (
+        <div className={styles.toolGroup}>
+          <div className={styles.toolGroupTitle}>{t('settingsMcpTools')}</div>
+          {tools.map((tool) => (
+            <SettingSwitch
+              key={tool.name}
+              label={tool.description || tool.name}
+              checked={!disabled.includes(tool.name)}
+              onChange={(value) => toggleMcpTool(tool.name, value)}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -3,6 +3,7 @@
  * 把策略从 store 的请求循环里抽出来，便于单测和按工具粒度配置。
  */
 import type { CreateMessageRequest } from '../api/types.js'
+import type { McpToolParam } from '../mcp.js'
 import type { ToolStep } from '../chat/types.js'
 import { TOOL_NAMES, clientToolParams, TOOL_REGISTRY } from './tools.js'
 import { MAX_AGENT_TURNS } from './toolConstants.js'
@@ -26,6 +27,10 @@ export type ToolPolicyInput = {
   agentTools: boolean
   /** 按工具粒度开启的名单 */
   enabledTools: ReadonlySet<string>
+  /** MCP 服务器提供的工具（可选，异步拉取后传入） */
+  mcpTools?: readonly McpToolParam[]
+  /** 被用户禁用的 MCP 工具名 */
+  mcpDisabledTools?: readonly string[]
   /** 界面语言，决定发给模型的工具描述 */
   locale?: string
 }
@@ -42,6 +47,8 @@ export const resolveChatTools = ({
   search,
   agentTools,
   enabledTools,
+  mcpTools = [],
+  mcpDisabledTools = [],
   locale = 'zh-CN',
 }: ToolPolicyInput): ResolvedTools => {
   if (mode === 'chat') {
@@ -64,8 +71,17 @@ export const resolveChatTools = ({
     }).map((tool) => tool.name)
   )
   const client = clientToolParams(names, locale)
+  // MCP 工具与模式无关：服务端配置里显式启用即可用（默认关闭）
+  const mcpClient: CreateMessageRequest['tools'] = mcpTools
+    .filter((tool) => !mcpDisabledTools.includes(tool.name))
+    .map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.input_schema,
+    }))
   return {
-    tools: [...serverTools(mode === 'full' || search), ...client],
+    tools: [...serverTools(mode === 'full' || search), ...client, ...mcpClient],
+    // clientNames 只包含浏览器端工具：MCP 工具走后端调用，由 runToolSteps 按前缀分流
     clientNames: new Set(client.map((tool) => tool.name)),
   }
 }

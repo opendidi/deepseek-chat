@@ -27,6 +27,7 @@ from .config import (
     DEEPSEEK_KEY_SOURCE,
     DIST_DIR,
 )
+from .mcp_client import manager as mcp_manager, migrate_legacy_config
 from .routers import ROUTERS
 from .rateLimit import DeepSeekRateLimitMiddleware
 from .storage import configure
@@ -37,7 +38,13 @@ from .uploadLimit import DeepSeekUploadLimitMiddleware
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     configure(DATA_DIR)
-    yield
+    # 旧版项目根 mcp.json 只在首次启动时导入一次，之后配置全部走 chats.db
+    migrate_legacy_config()
+    try:
+        yield
+    finally:
+        # 退出时终止所有 MCP 子进程，避免留下孤儿进程
+        await mcp_manager.close_all()
 
 
 app = FastAPI(title='deepseek-chat', lifespan=_lifespan, docs_url=None, redoc_url=None, openapi_url=None)
